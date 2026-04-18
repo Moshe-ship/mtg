@@ -1,0 +1,43 @@
+{
+  "name": "book_service",
+  "description": "Book a local service with a Gulf Arabic intent phrase.",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "intent_phrase": {
+        "type": "string",
+        "description": "The user's natural-language intent (Gulf Arabic expected).",
+        "x-mtg": {
+          "slot_type": "inflected_request_form",
+          "script": "ar",
+          "dialect_expected": "gulf",
+          "dialect_enforcement": "preserve",
+          "transliteration_allowed": false,
+          "morphologically_productive": true,
+          "canonicalization": "root_pattern",
+          "mode": "advisory",
+          "post_call_contract": ["script_match", "dialect_preserve"]
+        }
+      },
+      "service_id": {
+        "type": "string",
+        "description": "Internal service identifier (opaque).",
+        "x-mtg": {
+          "slot_type": "identifier",
+          "script": "latn",
+          "mode": "advisory"
+        }
+      },
+      "date": {
+        "type": "string",
+        "description": "Requested date in natural language.",
+        "x-mtg": {
+          "slot_type": "temporal",
+          "script": "any",
+          "mode": "advisory"
+        }
+      }
+    },
+    "required": ["intent_phrase", "service_id"]
+  }
+}

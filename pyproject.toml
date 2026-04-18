@@ -1,0 +1,45 @@
+[project]
+name = "mtg-guards"
+version = "0.1.0"
+description = "Morphological Type Guards — a JSON Schema extension for multilingual tool-call arguments"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+authors = [{ name = "Mousa Abumazin" }]
+keywords = [
+    "agents",
+    "function-calling",
+    "tool-use",
+    "type-system",
+    "multilingual",
+    "arabic",
+    "morphology",
+    "json-schema",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Text Processing :: Linguistic",
+    "Natural Language :: Arabic",
+]
+dependencies = [
+    "jsonschema>=4.0",
+]
+
+[project.optional-dependencies]
+morph = ["camel-tools>=1.5"]
+dev = ["pytest>=7.0"]
+
+[project.scripts]
+mtg = "mtg.cli:main"
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["mtg*", "adapters*", "eval*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

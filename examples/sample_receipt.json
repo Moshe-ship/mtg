@@ -1,0 +1,53 @@
+{
+  "call_id": "e7f0c6e4-d8e9-4c4a-9c8a-7e0f6e5d4c3b",
+  "tool": "book_service",
+  "ts": "2026-04-18T19:30:00+00:00",
+  "guards": {
+    "intent_phrase": {
+      "surface": "أبي أحجز",
+      "analysis": {
+        "script_detected": "ar",
+        "dialect_detected": "gulf",
+        "dialect_confidence": 0.82,
+        "root": null,
+        "pattern": null,
+        "lemma": null,
+        "morph_confidence": 0.0,
+        "backend": "fallback",
+        "backend_available": false,
+        "ensemble_agreement": null
+      },
+      "pre_call_violations": [
+        {
+          "code": "MORPH_CANONICALIZATION_FAILURE",
+          "severity": "low",
+          "phase": "pre",
+          "message": "morphology backend unavailable; falling back to surface-only",
+          "details": {"backend": "fallback"}
+        }
+      ],
+      "post_call_violations": [],
+      "mode": "advisory"
+    },
+    "service_id": {
+      "surface": "svc-42",
+      "analysis": {
+        "script_detected": "latn",
+        "dialect_detected": null,
+        "dialect_confidence": 0.0,
+        "root": null,
+        "pattern": null,
+        "lemma": null,
+        "morph_confidence": 0.0,
+        "backend": "fallback",
+        "backend_available": true,
+        "ensemble_agreement": null
+      },
+      "pre_call_violations": [],
+      "post_call_violations": [],
+      "mode": "advisory"
+    }
+  },
+  "outcome": "pass",
+  "hash_prev": null
+}

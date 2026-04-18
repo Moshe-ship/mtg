@@ -1,0 +1,8 @@
+{
+  "name": "book_service",
+  "arguments": {
+    "intent_phrase": "أبي أحجز",
+    "service_id": "svc-42",
+    "date": "بكرا"
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Moshe-ship/mtg/spec/receipt.schema.json",
+  "title": "MTG Receipt schema v0.1.0",
+  "type": "object",
+  "required": ["call_id", "tool", "ts", "guards", "outcome"],
+  "properties": {
+    "call_id": {
+      "type": "string",
+      "description": "UUID4 identifier for the tool call."
+    },
+    "tool": {
+      "type": "string",
+      "description": "Tool name being called."
+    },
+    "ts": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 UTC timestamp."
+    },
+    "guards": {
+      "type": "object",
+      "description": "Per-parameter guard state (surface, analysis, violations, mode).",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "surface": {"type": "string"},
+          "analysis": {"type": "object"},
+          "pre_call_violations": {"type": "array", "items": {"$ref": "#/$defs/violation"}},
+          "post_call_violations": {"type": "array", "items": {"$ref": "#/$defs/violation"}},
+          "mode": {"enum": ["advisory", "reconciled", "enforced"]}
+        }
+      }
+    },
+    "outcome": {
+      "type": "string",
+      "enum": ["pass", "partial", "fail"]
+    },
+    "hash_prev": {
+      "type": ["string", "null"],
+      "description": "SHA-256 hex of previous receipt's canonical JSON, or null for the chain head."
+    }
+  },
+  "$defs": {
+    "violation": {
+      "type": "object",
+      "required": ["code", "severity", "phase", "message"],
+      "properties": {
+        "code": {"type": "string"},
+        "severity": {"enum": ["high", "medium", "low", "info"]},
+        "phase": {"enum": ["pre", "post"]},
+        "message": {"type": "string"},
+        "details": {"type": "object"}
+      }
+    }
+  }
+}

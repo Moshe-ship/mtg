@@ -1,0 +1,32 @@
+{
+  "name": "send_message",
+  "description": "Send a message in the user's native dialect.",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "recipient_name": {
+        "type": "string",
+        "description": "Recipient's name (proper noun).",
+        "x-mtg": {
+          "slot_type": "named_entity",
+          "script": "any",
+          "mode": "advisory"
+        }
+      },
+      "message_body": {
+        "type": "string",
+        "description": "The message body — must stay in the user's Arabic register.",
+        "x-mtg": {
+          "slot_type": "free_text",
+          "script": "ar",
+          "dialect_expected": "any",
+          "dialect_enforcement": "preserve",
+          "transliteration_allowed": false,
+          "mode": "advisory",
+          "post_call_contract": ["script_match", "dialect_preserve", "no_surface_corruption"]
+        }
+      }
+    },
+    "required": ["recipient_name", "message_body"]
+  }
+}

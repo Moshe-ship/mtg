@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Moshe-ship/mtg/spec/mtg.schema.json",
+  "title": "MTG x-mtg extension schema v0.1.0",
+  "description": "Schema for the x-mtg extension block inside a JSON Schema string property. Describes linguistic constraints on the value.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "slot_type": {
+      "type": "string",
+      "description": "Linguistic slot the parameter occupies. Determines whether morphological analysis is applied.",
+      "enum": [
+        "action_verb",
+        "deverbal_noun",
+        "inflected_request_form",
+        "named_entity",
+        "temporal",
+        "numeric",
+        "identifier",
+        "free_text"
+      ],
+      "default": "free_text"
+    },
+    "script": {
+      "type": "string",
+      "description": "Required Unicode script for the value.",
+      "enum": ["ar", "latn", "he", "fa", "mixed", "any"],
+      "default": "any"
+    },
+    "dialect_expected": {
+      "type": "string",
+      "description": "Expected dialect register. Only applicable when script='ar'.",
+      "enum": ["msa", "gulf", "egy", "lev", "maghrebi", "any"],
+      "default": "any"
+    },
+    "dialect_enforcement": {
+      "type": "string",
+      "description": "How strictly to check dialect_expected. 'strict' blocks in enforced mode, 'preserve' warns, 'advisory' only logs.",
+      "enum": ["strict", "preserve", "advisory"],
+      "default": "advisory"
+    },
+    "transliteration_allowed": {
+      "type": "boolean",
+      "description": "If false, values in the declared script must not be Romanized (e.g. Arabizi).",
+      "default": true
+    },
+    "morphologically_productive": {
+      "type": "boolean",
+      "description": "If true, the span is expected to carry morphologically meaningful structure (root+pattern). Enables morph analysis.",
+      "default": false
+    },
+    "canonicalization": {
+      "type": "string",
+      "description": "Canonicalization applied to the analysis output.",
+      "enum": ["none", "lemma", "root_pattern", "normalized"],
+      "default": "none"
+    },
+    "canonical_form_required": {
+      "type": "boolean",
+      "description": "If true, the call payload must carry the canonical form in addition to the surface.",
+      "default": false
+    },
+    "mode": {
+      "type": "string",
+      "description": "v0.1.0 ships advisory only. reconciled and enforced are spec-defined but raise NotImplementedError in the reference validator.",
+      "enum": ["advisory", "reconciled", "enforced"],
+      "default": "advisory"
+    },
+    "post_call_contract": {
+      "type": "array",
+      "description": "Named post-call invariants the tool response must satisfy for this parameter.",
+      "items": {
+        "type": "string",
+        "enum": ["script_match", "dialect_preserve", "no_surface_corruption", "root_preserve"]
+      },
+      "default": []
+    }
+  }
+}

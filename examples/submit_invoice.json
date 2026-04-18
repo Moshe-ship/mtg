@@ -1,0 +1,40 @@
+{
+  "name": "submit_invoice",
+  "description": "Submit an invoice with an Arabic description.",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "description": {
+        "type": "string",
+        "description": "Free-text invoice description in Arabic (any dialect).",
+        "x-mtg": {
+          "slot_type": "free_text",
+          "script": "ar",
+          "dialect_expected": "any",
+          "transliteration_allowed": false,
+          "mode": "advisory",
+          "post_call_contract": ["script_match", "no_surface_corruption"]
+        }
+      },
+      "amount": {
+        "type": "number",
+        "description": "Invoice amount.",
+        "x-mtg": {
+          "slot_type": "numeric",
+          "script": "any",
+          "mode": "advisory"
+        }
+      },
+      "currency": {
+        "type": "string",
+        "description": "ISO 4217 currency code.",
+        "x-mtg": {
+          "slot_type": "identifier",
+          "script": "latn",
+          "mode": "advisory"
+        }
+      }
+    },
+    "required": ["description", "amount", "currency"]
+  }
+}
