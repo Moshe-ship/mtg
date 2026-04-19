@@ -104,13 +104,21 @@ def detect_script(text: str) -> ScriptLabel:
 
 
 def matches_required_script(text: str, required: str) -> bool:
-    """Does `text` match `required` script declaration?"""
+    """Does `text` match `required` script declaration?
+
+    Script semantics:
+    - "any"   → everything passes
+    - "mixed" → permissive, accepts ar, latn, or genuinely mixed content
+                (but not hebrew/persian/other). Schema authors use "mixed"
+                for named-entity-like fields that can be either script.
+    - "ar", "latn", "he", "fa" → strict, requires detected script to match.
+    - empty input → always passes (non-empty checks are caller's job).
+    """
     if required == "any":
         return True
     detected = detect_script(text)
-    if required == "mixed":
-        return detected == "mixed"
     if detected == "empty":
-        # Empty is permissive — callers who need non-empty must check separately.
         return True
+    if required == "mixed":
+        return detected in ("ar", "latn", "mixed")
     return detected == required
