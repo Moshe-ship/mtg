@@ -1,0 +1,51 @@
+name: cross-repo-smoke
+
+# Installs mtg (this repo), toolproof, and the Hurmoz tool-schemas into a
+# fresh venv, then runs the full guard_tool -> receipt_from_mtg_run path.
+# Guards the Arabic agent stack against cross-repo integration regressions
+# on every push to main and every pull request.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+      - name: Check out mtg (self)
+        uses: actions/checkout@v4
+        with:
+          path: mtg
+
+      - name: Check out toolproof
+        uses: actions/checkout@v4
+        with:
+          repository: Moshe-ship/toolproof
+          path: toolproof
+
+      - name: Check out hurmoz
+        uses: actions/checkout@v4
+        with:
+          repository: Moshe-ship/hurmoz
+          path: hurmoz
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Run cross-repo smoke
+        env:
+          MTG: ${{ github.workspace }}/mtg
+          TOOLPROOF: ${{ github.workspace }}/toolproof
+          HURMOZ: ${{ github.workspace }}/hurmoz
+        run: |
+          bash mtg/scripts/cross_repo_smoke.sh

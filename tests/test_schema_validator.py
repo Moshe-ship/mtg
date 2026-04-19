@@ -77,3 +77,29 @@ def test_guard_spec_from_dict_lenient_bypasses_validation():
     spec = GuardSpec.from_dict({"script": "bogus"}, validate=False)
     # Bypass leaves the invalid value in the dataclass — caller accepted risk.
     assert spec.script == "bogus"
+
+
+def test_get_schema_public_accessor_returns_parsed_dict():
+    """Regression: downstream consumers must be able to read the bundled
+    schema without touching internal paths."""
+    import mtg
+
+    schema = mtg.get_schema()
+    assert isinstance(schema, dict)
+    # Spot-check the key structural promises of the schema
+    assert schema["type"] == "object"
+    assert "slot_type" in schema["properties"]
+    slot_type_enum = schema["properties"]["slot_type"]["enum"]
+    assert "action_verb" in slot_type_enum
+    assert "free_text" in slot_type_enum
+    # load_schema and get_schema are aliases
+    assert mtg.load_schema() == schema
+
+
+def test_load_schema_survives_repeated_calls():
+    """The schema is small; downstream callers may load it repeatedly."""
+    from mtg.schema_validator import load_schema
+
+    a = load_schema()
+    b = load_schema()
+    assert a == b

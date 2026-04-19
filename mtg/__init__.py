@@ -51,6 +51,23 @@ from mtg.receipts import (
     read_chain,
     verify_chain,
 )
+from mtg.schema_validator import (
+    MTGSchemaError,
+    load_schema,
+    validate_x_mtg,
+    validate_x_mtg_strict,
+)
+
+
+def get_schema() -> dict:
+    """Return the bundled x-mtg JSON Schema as a dict.
+
+    Convenience alias for `mtg.schema_validator.load_schema`. Stable public
+    API — downstream consumers can call this instead of touching internal
+    file paths or the `spec/` directory.
+    """
+    return load_schema()
+
 
 __all__ = [
     "__version__",
@@ -71,4 +88,10 @@ __all__ = [
     "build_receipt",
     "read_chain",
     "verify_chain",
+    # Schema accessors (public)
+    "MTGSchemaError",
+    "get_schema",
+    "load_schema",
+    "validate_x_mtg",
+    "validate_x_mtg_strict",
 ]

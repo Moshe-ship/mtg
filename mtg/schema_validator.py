@@ -28,22 +28,25 @@ class MTGSchemaError(ValueError):
         super().__init__("; ".join(errors))
 
 
+def load_schema() -> dict[str, Any]:
+    """Load the bundled x-mtg JSON Schema as a dict.
+
+    Stable public API. Prefers the on-disk package path; falls back to
+    importlib.resources for zipped wheel installs. Call this when you need
+    the raw schema to hand to another validator or to introspect enums.
+    """
+    if _SPEC_PATH.exists():
+        with _SPEC_PATH.open(encoding="utf-8") as f:
+            return json.load(f)
+    from importlib.resources import files
+    text = files("mtg").joinpath("mtg.schema.json").read_text(encoding="utf-8")
+    return json.loads(text)
+
+
 def _get_validator() -> Draft202012Validator:
     global _VALIDATOR
     if _VALIDATOR is None:
-        # Primary: load the package-shipped schema (works after pip install).
-        if _SPEC_PATH.exists():
-            with _SPEC_PATH.open(encoding="utf-8") as f:
-                schema = json.load(f)
-        else:
-            # importlib.resources fallback for installed packages where the
-            # filesystem path may differ (e.g. zipped wheels).
-            from importlib.resources import files
-            schema_text = files("mtg").joinpath("mtg.schema.json").read_text(
-                encoding="utf-8"
-            )
-            schema = json.loads(schema_text)
-        _VALIDATOR = Draft202012Validator(schema)
+        _VALIDATOR = Draft202012Validator(load_schema())
     return _VALIDATOR
 
 
