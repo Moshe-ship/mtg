@@ -49,13 +49,14 @@ class FPReport:
     invisible_hits: int = 0
     homoglyph_hits: int = 0
     mixed_script_hits: int = 0
+    context_aware: bool = True
     examples: dict[str, list[str]] = field(default_factory=lambda: {
         "bidi": [], "invisible": [], "homoglyph": [], "mixed_script": [],
     })
 
     def record(self, value: str) -> None:
         self.total_strings += 1
-        f = detect_bidi_threats(value)
+        f = detect_bidi_threats(value, context_aware_digits=self.context_aware)
         if not f.any():
             return
         if f.bidi_controls or f.tag_chars or f.bidi_marks:
@@ -133,24 +134,28 @@ def _iter_aae_items() -> Iterable[tuple[str, str]]:
                     yield f"aae_{dialect}_arg", arg_value
 
 
-def run_fp_analysis() -> list[FPReport]:
-    """Run the detector over every clean corpus we can find."""
+def run_fp_analysis(context_aware: bool = True) -> list[FPReport]:
+    """Run the detector over every clean corpus we can find.
+
+    `context_aware=False` reproduces the pre-fix behavior so the
+    published report can show a verifiable before/after delta.
+    """
     buckets: dict[str, FPReport] = {}
 
     for label, value in list(_iter_persian()) + list(_iter_aae_items()):
         if label not in buckets:
-            buckets[label] = FPReport(corpus_name=label)
+            buckets[label] = FPReport(corpus_name=label, context_aware=context_aware)
         buckets[label].record(value)
 
     return sorted(buckets.values(), key=lambda r: r.corpus_name)
 
 
-def render_markdown(reports: list[FPReport]) -> str:
+def render_markdown(reports: list[FPReport], title_suffix: str = "") -> str:
     if not reports:
         return "No clean corpora found. Set $AAE or check out arabic-agent-eval as a sibling.\n"
 
     lines = [
-        "# MTG security layer — false-positive analysis",
+        f"# MTG security layer — false-positive analysis{title_suffix}",
         "",
         "Every string scanned here is from a known-clean corpus: the items are",
         "real multilingual tool-call content, not attack fixtures. Any hit is",
@@ -211,10 +216,20 @@ def render_markdown(reports: list[FPReport]) -> str:
 def main() -> int:
     p = argparse.ArgumentParser(description="FP analysis for MTG security layer")
     p.add_argument("--out", help="Write markdown report to this path instead of stdout")
+    p.add_argument(
+        "--legacy",
+        action="store_true",
+        help=(
+            "Reproduce the pre-fix (non-context-aware) behavior. "
+            "Shows the baseline FP rate that the context-aware fix solved — "
+            "useful for publishing a before/after delta."
+        ),
+    )
     args = p.parse_args()
 
-    reports = run_fp_analysis()
-    md = render_markdown(reports)
+    reports = run_fp_analysis(context_aware=not args.legacy)
+    suffix = " (pre-fix baseline)" if args.legacy else ""
+    md = render_markdown(reports, title_suffix=suffix)
     if args.out:
         Path(args.out).write_text(md, encoding="utf-8")
         print(f"wrote {args.out}")

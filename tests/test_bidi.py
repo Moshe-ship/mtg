@@ -119,6 +119,21 @@ def test_persian_digits_in_persian_context_are_not_homoglyphs():
     assert f.homoglyphs == ()
 
 
+def test_legacy_flag_reproduces_prefix_behavior():
+    """Regression: detect_bidi_threats(..., context_aware_digits=False)
+    must reproduce the pre-fix behavior so docs/fp_report_prefix.md
+    stays verifiable. Flipping this back would hide the before/after
+    delta the published FP analysis depends on."""
+    # A real arabic-agent-eval item that fired in pre-fix state
+    arabic_with_indic_digits = "الساعة ٥"
+    # Context-aware (default, post-fix): no false positive
+    assert detect_bidi_threats(arabic_with_indic_digits).homoglyphs == ()
+    # Legacy (pre-fix): flags the Arabic-Indic digit as a homoglyph
+    legacy = detect_bidi_threats(arabic_with_indic_digits, context_aware_digits=False)
+    assert len(legacy.homoglyphs) == 1
+    assert legacy.homoglyphs[0][0] == "\u0665"  # Arabic-Indic 5
+
+
 def test_detects_mixed_script_within_token():
     """'admin' with one Cyrillic letter embedded should flag as mixed."""
     f = detect_bidi_threats("\u0430dmin")  # Cyrillic а + Latin dmin

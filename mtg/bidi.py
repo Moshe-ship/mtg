@@ -203,23 +203,35 @@ _PERSIAN_DIGITS = frozenset(chr(cp) for cp in range(0x06F0, 0x06FA))
 _SCRIPT_NATIVE_DIGITS = _ARABIC_INDIC_DIGITS | _PERSIAN_DIGITS
 
 
-def detect_bidi_threats(value: str) -> BidiFinding:
+def detect_bidi_threats(
+    value: str,
+    *,
+    context_aware_digits: bool = True,
+) -> BidiFinding:
     """Scan `value` for BiDi control smuggling, invisible chars, tag
     characters, and homoglyphs.
 
     Pure scan; no I/O. Returns a frozen BidiFinding — caller decides
     whether to treat as violations.
 
-    Context-aware: Arabic-Indic / Persian digits in Arabic-dominant
-    content are NOT treated as homoglyphs (they are normal typography).
-    A mixed Latin+Arabic-Indic value (e.g. "acct ١٢٣" where "acct" is
-    Latin and ١٢٣ is Arabic-Indic) IS flagged because the script mix
-    makes the digit substitution the laundering signal.
+    Context-aware (default): Arabic-Indic / Persian digits in
+    Arabic-dominant content are NOT treated as homoglyphs (they are
+    normal typography). A mixed Latin+Arabic-Indic value IS flagged
+    because the script mix makes the digit substitution the laundering
+    signal.
+
+    `context_aware_digits=False` reproduces the pre-fix behavior in
+    which every Arabic-Indic / Persian digit flagged regardless of
+    context. Kept so the published FP analysis can show a
+    before/after delta — see `scripts/fp_analysis.py --legacy`.
     """
     if not value:
         return BidiFinding()
 
-    native_digits_legitimate = _arabic_indic_digit_is_contextually_legitimate(value)
+    native_digits_legitimate = (
+        context_aware_digits
+        and _arabic_indic_digit_is_contextually_legitimate(value)
+    )
 
     controls: list[str] = []
     marks: list[str] = []
