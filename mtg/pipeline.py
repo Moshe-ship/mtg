@@ -289,10 +289,57 @@ def validate_pre(value: str, spec: GuardSpec) -> GuardResult:
         value = ""
 
     analysis = _analyze(value, spec)
-    violations = _pre_call_violations(value, spec, analysis)
+    violations: list[Violation] = []
 
-    # Morph canonicalization failure + ambiguity annotations
-    if spec.morphologically_productive and spec.script == "ar":
+    # FREE_TEXT_OVERFLOW — detect BEFORE the morph annotations so the
+    # downgraded analysis flows through to canonical_form_required and the
+    # returned GuardResult. Taxonomy contract: overflow "downgrades
+    # morphological analysis for that call", so we strip root/pattern/lemma
+    # and zero morph_confidence. Dialect detection is preserved because
+    # overflow is about morphology, not dialect.
+    downgraded = False
+    overflow_ratio = 0.0
+    if spec.is_factorable and value and spec.script in ("ar", "mixed", "any"):
+        overflow, overflow_ratio = _free_text_overflow_detected(value)
+        if overflow:
+            downgraded = True
+            violations.append(
+                Violation(
+                    code="FREE_TEXT_OVERFLOW",
+                    severity="medium",
+                    phase="pre",
+                    message=(
+                        f"factorable slot '{spec.slot_type}' received value with "
+                        f"{overflow_ratio:.0%} non-factorable tokens; morphology downgraded"
+                    ),
+                    details={
+                        "slot_type": spec.slot_type,
+                        "non_factorable_ratio": round(overflow_ratio, 3),
+                        "threshold": _FREE_TEXT_OVERFLOW_RATIO,
+                        "downgraded": True,
+                    },
+                )
+            )
+            # Strip morphology — root/pattern/lemma are meaningless here.
+            analysis = Analysis(
+                script_detected=analysis.script_detected,
+                dialect_detected=analysis.dialect_detected,
+                dialect_confidence=analysis.dialect_confidence,
+                root=None,
+                pattern=None,
+                lemma=None,
+                morph_confidence=0.0,
+                backend=analysis.backend,
+                backend_available=analysis.backend_available,
+                ensemble_agreement=analysis.ensemble_agreement,
+            )
+
+    violations.extend(_pre_call_violations(value, spec, analysis))
+
+    # Morph canonicalization failure + ambiguity annotations — suppressed
+    # when overflow downgraded morphology, since those codes describe a
+    # productive-slot failure, not a free-text-overflow downgrade.
+    if spec.morphologically_productive and spec.script == "ar" and not downgraded:
         if not analysis.backend_available:
             violations.append(
                 Violation(
@@ -314,33 +361,13 @@ def validate_pre(value: str, spec: GuardSpec) -> GuardResult:
                 )
             )
 
-    # FREE_TEXT_OVERFLOW — spec says factorable slots holding mostly
-    # non-factorable content should be flagged. Applies to Arabic factorable
-    # slots; non-Arabic content is already caught by SCRIPT_VIOLATION.
-    if spec.is_factorable and value and spec.script in ("ar", "mixed", "any"):
-        overflow, ratio = _free_text_overflow_detected(value)
-        if overflow:
-            violations.append(
-                Violation(
-                    code="FREE_TEXT_OVERFLOW",
-                    severity="medium",
-                    phase="pre",
-                    message=(
-                        f"factorable slot '{spec.slot_type}' received value with "
-                        f"{ratio:.0%} non-factorable tokens; morphology is noise here"
-                    ),
-                    details={
-                        "slot_type": spec.slot_type,
-                        "non_factorable_ratio": round(ratio, 3),
-                        "threshold": _FREE_TEXT_OVERFLOW_RATIO,
-                    },
-                )
-            )
-
-    # canonical_form_required — when the schema author declared that a
-    # canonical form MUST be derivable (lemma or root_pattern), emit a
-    # high-severity violation if canonicalize() cannot succeed. This is the
-    # runtime counterpart to GuardSpec.canonical_form_required.
+    # canonical_form_required — the schema author declared that a canonical
+    # form MUST be derivable at validation time. We call canonicalize() on
+    # the (possibly downgraded) analysis and emit a high-severity violation
+    # when the requested form cannot be produced. This is a derivability
+    # requirement, not a wire-format requirement: the call payload is NOT
+    # expected to carry the canonical form; the pipeline is expected to
+    # compute it. See spec/mtg.schema.json.
     if spec.canonical_form_required and spec.canonicalization not in ("none",):
         canonical, succeeded = canonicalize(value, spec.canonicalization, [analysis])
         if not succeeded:
@@ -357,6 +384,7 @@ def validate_pre(value: str, spec: GuardSpec) -> GuardResult:
                         "canonicalization": spec.canonicalization,
                         "backend": analysis.backend,
                         "fallback_surface": canonical,
+                        "downgraded_by_overflow": downgraded,
                     },
                 )
             )

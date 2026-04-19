@@ -109,6 +109,7 @@ Full spec: [spec/taxonomy.md](spec/taxonomy.md) · [spec/violations.md](spec/vio
 | `SURFACE_CORRUPTION_POST_CALL` | post | high |
 | `ROOT_DRIFT` | post | medium |
 | `FREE_TEXT_OVERFLOW` | pre | medium |
+| `CANONICALIZATION_REQUIRED` | pre | high |
 
 ## CLI
 

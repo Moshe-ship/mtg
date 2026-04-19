@@ -57,7 +57,7 @@
     },
     "canonical_form_required": {
       "type": "boolean",
-      "description": "If true, the call payload must carry the canonical form in addition to the surface.",
+      "description": "If true, the pipeline must be able to derive the canonical form (as selected by `canonicalization`) from the value at validation time. When it cannot, pre-call validation emits CANONICALIZATION_REQUIRED at high severity. This is a derivability requirement on the validator, not a wire-format requirement on the call payload — callers still send only the surface value.",
       "default": false
     },
     "mode": {

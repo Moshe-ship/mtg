@@ -62,4 +62,8 @@ Any `string` property without `x-mtg` is treated as `free_text` with `script: an
 
 ## `FREE_TEXT_OVERFLOW`
 
-If a parameter declares a factorable `slot_type` but runtime inspection shows the value is dominantly non-factorable (e.g. >70% named-entity tokens, all-numeric), the pipeline emits `FREE_TEXT_OVERFLOW` and downgrades morphological analysis for that call. This is a diagnostic signal — it means the schema author put factorable expectations on a slot that actual users fill with free text.
+If a parameter declares a factorable `slot_type` but runtime inspection shows the value is dominantly non-factorable (e.g. >70% named-entity tokens, all-numeric), the pipeline emits `FREE_TEXT_OVERFLOW` and downgrades morphological analysis for that call.
+
+Concretely, the downgrade means the returned `Analysis` has `root=None`, `pattern=None`, `lemma=None`, and `morph_confidence=0.0`. The `MORPH_CANONICALIZATION_FAILURE` and `MORPH_AMBIGUITY` annotations are suppressed for overflow-downgraded calls because they would be redundant — morphology was never meaningful here. Dialect detection on the (Arabic) surface is preserved, since dialect classification works on tokens that are not morphologically productive.
+
+The signal also means the schema author put factorable expectations on a slot that actual users fill with free text — worth reviewing the guard annotations for that parameter.

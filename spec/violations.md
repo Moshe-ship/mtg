@@ -54,9 +54,9 @@ A parameter declared a factorable `slot_type` but the actual value is dominantly
 
 ### `CANONICALIZATION_REQUIRED` · high
 
-The schema author declared `canonical_form_required: true` with `canonicalization: lemma` or `canonicalization: root_pattern`, but the pipeline could not produce a canonical form — typically because the morphology backend is unavailable and the surface-fallback path does not satisfy the declared canonicalization mode.
+The schema author declared `canonical_form_required: true` with `canonicalization: lemma` or `canonicalization: root_pattern`, but the pipeline could not produce a canonical form — typically because the morphology backend is unavailable, or because `FREE_TEXT_OVERFLOW` downgraded the morphological analysis for this call.
 
-This signals a configuration-time contract breach: the schema promises downstream consumers a canonical form that the current runtime cannot deliver.
+`canonical_form_required` is a **derivability** requirement on the validator, not a wire-format requirement on the call payload — the caller still sends only the surface value; the pipeline is responsible for computing the canonical form.
 
 ## Post-call violations
 
