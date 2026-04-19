@@ -33,7 +33,7 @@ In v0.1.0 the reference validator raises `NotImplementedError("enforced mode not
 
 ## Why advisory-only for v0.1.0
 
-Enforcement policy requires confidence in the signal. Dialect classifiers and morphological backends have real error rates (CAMeL Tools disagrees with Farasa on 15–25% of dialectal inputs; commodity dialect classifiers are 70–85% accurate on short tool-call inputs). Shipping enforced mode before measuring baseline violation rates means blocking real calls on noisy signal.
+Enforcement policy requires confidence in the signal. Dialect classifiers and morphological backends have real error rates — the built-in keyword classifier's accuracy on short tool-call inputs has not been measured in a public bundle yet, and CAMeL Tools / Farasa disagreement rates on dialectal inputs are known to be non-trivial in the literature but also not yet measured here. Shipping enforced mode before publishing those numbers means blocking real calls on a noisy signal we haven't characterized.
 
 Advisory-only first, measure the violation distribution, then enable enforcement once the data supports it.
 

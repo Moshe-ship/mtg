@@ -2,7 +2,7 @@
 
 All notable changes to MTG (Morphological Type Guards).
 
-## Unreleased — BiDi security layer + Persian pilot + reliability runtime
+## Unreleased — BiDi security layer + Persian pilot + reconciled-mode repairs
 
 ### Added (security layer)
 
@@ -23,7 +23,7 @@ All notable changes to MTG (Morphological Type Guards).
 
 - The Persian pilot proves the MTG primitive travels beyond Arabic without language-specific code. Same pipeline, same adapter, same receipt shape — only the `script` and dataset change.
 
-## Unreleased (earlier) — reliability runtime (reconciled mode + report CLI)
+## Unreleased (earlier) — reconciled mode + report CLI
 
 ### Added
 
