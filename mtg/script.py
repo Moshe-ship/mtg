@@ -111,7 +111,14 @@ def matches_required_script(text: str, required: str) -> bool:
     - "mixed" → permissive, accepts ar, latn, or genuinely mixed content
                 (but not hebrew/persian/other). Schema authors use "mixed"
                 for named-entity-like fields that can be either script.
-    - "ar", "latn", "he", "fa" → strict, requires detected script to match.
+    - "fa"    → accepts detected 'fa' OR 'ar'. Persian uses the Arabic
+                script as a strict superset; a Persian name or city that
+                happens not to contain the Persian-specific letters
+                (پ چ ژ گ) renders as pure-Arabic-block text, which is
+                still a valid Persian surface. Schema authors who want
+                to REQUIRE Persian-specific letters should declare
+                dialect or morphology guards, not tighten the script.
+    - "ar", "latn", "he" → strict, requires detected script to match.
     - empty input → always passes (non-empty checks are caller's job).
     """
     if required == "any":
@@ -121,4 +128,6 @@ def matches_required_script(text: str, required: str) -> bool:
         return True
     if required == "mixed":
         return detected in ("ar", "latn", "mixed")
+    if required == "fa":
+        return detected in ("fa", "ar")
     return detected == required

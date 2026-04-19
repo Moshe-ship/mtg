@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from difflib import SequenceMatcher
 
+from mtg.bidi import detect_bidi_threats
 from mtg.canonical import canonicalize, normalize
 from mtg.dialect import get_dialect_backend, KeywordDialectClassifier
 from mtg.morph import get_morph_backend
@@ -94,12 +95,144 @@ def _validate_mode(spec: GuardSpec) -> None:
         )
 
 
+def _bidi_violations(value: str) -> list[Violation]:
+    """Security pre-flight: BiDi control smuggling, invisible padding,
+    tag characters, homoglyphs, mixed-script tokens. Runs on every
+    guarded value regardless of declared `script`. These are security
+    issues, not linguistic preferences — high severity by default.
+
+    Detects the CVE-2021-42574 ("Trojan Source") attack family at the
+    tool-argument level.
+    """
+    violations: list[Violation] = []
+    finding = detect_bidi_threats(value)
+    if not finding.any():
+        return violations
+
+    if finding.bidi_controls:
+        violations.append(
+            Violation(
+                code="BIDI_CONTROL_SMUGGLING",
+                severity="high",
+                phase="pre",
+                message=(
+                    f"value contains {len(finding.bidi_controls)} Unicode BiDi "
+                    f"control character(s) (U+202A..U+202E, U+2066..U+2069) — "
+                    f"these reorder DISPLAY without changing LOGICAL content "
+                    f"and are the CVE-2021-42574 attack class"
+                ),
+                details={
+                    "codepoints": [hex(ord(c)) for c in finding.bidi_controls],
+                    "count": len(finding.bidi_controls),
+                },
+            )
+        )
+
+    if finding.tag_chars:
+        violations.append(
+            Violation(
+                code="BIDI_CONTROL_SMUGGLING",
+                severity="high",
+                phase="pre",
+                message=(
+                    f"value contains {len(finding.tag_chars)} Unicode TAG "
+                    f"character(s) (U+E0020..U+E007F) — invisible code points "
+                    f"used in LLM prompt-injection attacks"
+                ),
+                details={
+                    "codepoints": [hex(ord(c)) for c in finding.tag_chars],
+                    "count": len(finding.tag_chars),
+                },
+            )
+        )
+
+    if finding.invisible_chars:
+        violations.append(
+            Violation(
+                code="INVISIBLE_CONTENT",
+                severity="medium",
+                phase="pre",
+                message=(
+                    f"value contains {len(finding.invisible_chars)} zero-width / "
+                    f"invisible character(s) — padding and laundering signal"
+                ),
+                details={
+                    "codepoints": [hex(ord(c)) for c in finding.invisible_chars],
+                    "count": len(finding.invisible_chars),
+                },
+            )
+        )
+
+    if finding.homoglyphs:
+        violations.append(
+            Violation(
+                code="SCRIPT_HOMOGLYPH",
+                severity="medium",
+                phase="pre",
+                message=(
+                    f"value contains {len(finding.homoglyphs)} homoglyph "
+                    f"character(s) from lookalike scripts (Cyrillic/Greek/Arabic-Indic "
+                    f"digits) — script laundering signal"
+                ),
+                details={
+                    "pairs": [
+                        {"glyph": g, "codepoint": hex(ord(g)), "latin_lookalike": lat}
+                        for g, lat in finding.homoglyphs
+                    ],
+                    "count": len(finding.homoglyphs),
+                },
+            )
+        )
+
+    if finding.mixed_script_within_token:
+        violations.append(
+            Violation(
+                code="SCRIPT_HOMOGLYPH",
+                severity="medium",
+                phase="pre",
+                message=(
+                    "value contains a token that mixes scripts (e.g. Cyrillic + "
+                    "Latin within one word) — strong laundering signal"
+                ),
+                details={"reason": "mixed_script_within_token"},
+            )
+        )
+
+    # BIDI_MARKS alone (LRM/RLM) are sometimes legitimate in Arabic text
+    # adjacent to Latin punctuation; flag only when combined with other
+    # signals to keep false-positive rate low.
+    if finding.bidi_marks and (
+        finding.bidi_controls or finding.invisible_chars or finding.homoglyphs
+    ):
+        violations.append(
+            Violation(
+                code="BIDI_CONTROL_SMUGGLING",
+                severity="medium",
+                phase="pre",
+                message=(
+                    f"value contains {len(finding.bidi_marks)} BiDi mark(s) "
+                    f"(U+200E/U+200F) alongside other suspicious characters"
+                ),
+                details={
+                    "codepoints": [hex(ord(c)) for c in finding.bidi_marks],
+                    "count": len(finding.bidi_marks),
+                },
+            )
+        )
+
+    return violations
+
+
 def _pre_call_violations(
     value: str,
     spec: GuardSpec,
     analysis: Analysis,
 ) -> list[Violation]:
     violations: list[Violation] = []
+
+    # BiDi / RTL security pre-flight — always runs, regardless of declared
+    # script. Security issues take priority over linguistic constraints.
+    violations.extend(_bidi_violations(value))
 
     # Script
     if spec.script != "any" and not matches_required_script(value, spec.script):

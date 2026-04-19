@@ -2,7 +2,28 @@
 
 All notable changes to MTG (Morphological Type Guards).
 
-## Unreleased — reliability runtime (reconciled mode + report CLI)
+## Unreleased — BiDi security layer + Persian pilot + reliability runtime
+
+### Added (security layer)
+
+- **`mtg.bidi`** — detection and repair primitives for agent-argument security:
+  - `BIDI_CONTROL_SMUGGLING` · high — Unicode directional control chars (U+202A..U+202E, U+2066..U+2069) and invisible TAG chars (U+E0020..U+E007F). Covers the CVE-2021-42574 ("Trojan Source") attack class at the tool-argument level.
+  - `INVISIBLE_CONTENT` · medium — zero-width chars (U+200B ZWSP, U+2060 WJ, U+FEFF BOM, U+00AD SHY, U+034F CGJ). ZWNJ/ZWJ deliberately excluded — they are legitimate in Persian, Urdu, Hindi, Thai, emoji.
+  - `SCRIPT_HOMOGLYPH` · medium — Cyrillic/Greek/Arabic-Indic-digit lookalikes, and single-token cross-script mixing.
+  - `detect_bidi_threats`, `strip_bidi`, `rewrite_homoglyphs` public primitives.
+- Security checks run on every guarded value regardless of declared `script` — these are security issues, not linguistic preferences.
+
+### Added (Persian pilot)
+
+- `datasets/persian_v1.jsonl` — 10 Persian/Farsi items.
+- `examples/book_flight_persian.json` — Persian tool schema (script=fa on all Persian slots).
+- `matches_required_script("fa")` now accepts detected `ar` as a valid subset — Persian uses the Arabic script as a strict superset, so a Persian value without پ/چ/ژ/گ is legitimately indistinguishable at the script layer (by design; dialect/morphology is the right layer for finer-grained Persian/Arabic separation).
+
+### Design notes
+
+- The Persian pilot proves the MTG primitive travels beyond Arabic without language-specific code. Same pipeline, same adapter, same receipt shape — only the `script` and dataset change.
+
+## Unreleased (earlier) — reliability runtime (reconciled mode + report CLI)
 
 ### Added
 

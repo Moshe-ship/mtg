@@ -1,0 +1,55 @@
+{
+  "name": "book_flight",
+  "description": "Book a flight, preserving Persian surface on all Persian-valued arguments.",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "intent_phrase": {
+        "type": "string",
+        "description": "User's request phrase in Persian (Farsi).",
+        "x-mtg": {
+          "slot_type": "inflected_request_form",
+          "script": "fa",
+          "transliteration_allowed": false,
+          "morphologically_productive": true,
+          "canonicalization": "normalized",
+          "mode": "advisory",
+          "post_call_contract": ["script_match", "no_surface_corruption"]
+        }
+      },
+      "origin_city": {
+        "type": "string",
+        "description": "Origin city name in Persian.",
+        "x-mtg": {
+          "slot_type": "named_entity",
+          "script": "fa",
+          "transliteration_allowed": false,
+          "mode": "advisory",
+          "post_call_contract": ["script_match", "no_surface_corruption"]
+        }
+      },
+      "destination_city": {
+        "type": "string",
+        "description": "Destination city name in Persian.",
+        "x-mtg": {
+          "slot_type": "named_entity",
+          "script": "fa",
+          "transliteration_allowed": false,
+          "mode": "advisory",
+          "post_call_contract": ["script_match", "no_surface_corruption"]
+        }
+      },
+      "flight_class": {
+        "type": "string",
+        "enum": ["economy", "business", "first"],
+        "description": "Flight class identifier.",
+        "x-mtg": {
+          "slot_type": "identifier",
+          "script": "latn",
+          "mode": "advisory"
+        }
+      }
+    },
+    "required": ["intent_phrase", "origin_city", "destination_city"]
+  }
+}
