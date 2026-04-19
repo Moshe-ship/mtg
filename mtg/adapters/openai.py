@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from adapters import ValidationReport
+from mtg.adapters import ValidationReport
 from mtg.pipeline import validate_pre, validate_post
 from mtg.types import GuardResult, GuardSpec
 

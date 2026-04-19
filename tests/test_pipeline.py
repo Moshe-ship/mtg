@@ -112,3 +112,110 @@ def test_free_text_script_any_is_permissive():
     })
     result = validate_pre("literally anything you want", spec)
     assert result.violations == ()
+
+
+def test_free_text_overflow_numeric_dominated():
+    """Regression: factorable slot filled with dominantly non-factorable
+    content must emit FREE_TEXT_OVERFLOW (finding #4)."""
+    spec = GuardSpec.from_dict({
+        "slot_type": "action_verb",
+        "script": "any",
+        "mode": "advisory",
+    })
+    result = validate_pre("1000 2000 3000 4000", spec)
+    codes = {v.code for v in result.violations}
+    assert "FREE_TEXT_OVERFLOW" in codes
+    v = next(v for v in result.violations if v.code == "FREE_TEXT_OVERFLOW")
+    assert v.severity == "medium"
+    assert v.details["non_factorable_ratio"] >= 0.7
+
+
+def test_free_text_overflow_identifier_dominated():
+    """Latin identifier tokens in a factorable slot fire the overflow."""
+    spec = GuardSpec.from_dict({
+        "slot_type": "deverbal_noun",
+        "script": "any",
+        "mode": "advisory",
+    })
+    result = validate_pre("svc-42 ABC123 id_99 REF-07", spec)
+    codes = {v.code for v in result.violations}
+    assert "FREE_TEXT_OVERFLOW" in codes
+
+
+def test_no_free_text_overflow_on_genuine_arabic():
+    """A factorable slot with real Arabic morphological content should NOT
+    trigger FREE_TEXT_OVERFLOW."""
+    spec = GuardSpec.from_dict({
+        "slot_type": "inflected_request_form",
+        "script": "ar",
+        "dialect_expected": "gulf",
+        "morphologically_productive": True,
+        "mode": "advisory",
+    })
+    result = validate_pre("أبي أحجز فندق في دبي", spec)
+    codes = {v.code for v in result.violations}
+    assert "FREE_TEXT_OVERFLOW" not in codes
+
+
+def test_no_free_text_overflow_on_non_factorable_slot():
+    """Non-factorable slots (named_entity, temporal, numeric, identifier,
+    free_text) must never emit FREE_TEXT_OVERFLOW."""
+    spec = GuardSpec.from_dict({
+        "slot_type": "identifier",
+        "script": "latn",
+        "mode": "advisory",
+    })
+    result = validate_pre("svc-42", spec)
+    codes = {v.code for v in result.violations}
+    assert "FREE_TEXT_OVERFLOW" not in codes
+
+
+def test_canonical_form_required_emits_high_violation_when_backend_unavailable():
+    """Regression: spec.canonical_form_required=true + root_pattern must emit
+    CANONICALIZATION_REQUIRED when the morphology backend cannot produce
+    root/pattern (finding #3)."""
+    spec = GuardSpec.from_dict({
+        "slot_type": "inflected_request_form",
+        "script": "ar",
+        "dialect_expected": "gulf",
+        "morphologically_productive": True,
+        "canonicalization": "root_pattern",
+        "canonical_form_required": True,
+        "mode": "advisory",
+    })
+    result = validate_pre("أبي أحجز", spec)
+    codes_sev = {(v.code, v.severity) for v in result.violations}
+    # When no CAMeL Tools backend is present, the fallback path yields no
+    # root/pattern — the violation must fire at high severity.
+    assert ("CANONICALIZATION_REQUIRED", "high") in codes_sev
+
+
+def test_canonical_form_required_not_emitted_for_normalized_mode():
+    """canonicalization='normalized' always succeeds (pure string transform),
+    so canonical_form_required must NOT fire."""
+    spec = GuardSpec.from_dict({
+        "slot_type": "named_entity",
+        "script": "ar",
+        "canonicalization": "normalized",
+        "canonical_form_required": True,
+        "mode": "advisory",
+    })
+    result = validate_pre("الرياض", spec)
+    codes = {v.code for v in result.violations}
+    assert "CANONICALIZATION_REQUIRED" not in codes
+
+
+def test_canonical_form_required_not_emitted_when_flag_off():
+    """Without the canonical_form_required flag, no violation even if the
+    backend cannot compute a canonical form."""
+    spec = GuardSpec.from_dict({
+        "slot_type": "inflected_request_form",
+        "script": "ar",
+        "morphologically_productive": True,
+        "canonicalization": "root_pattern",
+        "canonical_form_required": False,
+        "mode": "advisory",
+    })
+    result = validate_pre("أبي أحجز", spec)
+    codes = {v.code for v in result.violations}
+    assert "CANONICALIZATION_REQUIRED" not in codes

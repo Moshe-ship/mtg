@@ -7,7 +7,7 @@ upstream integrations can discover "hermes_fc" explicitly.
 
 from __future__ import annotations
 
-from adapters.openai import GuardedTool, guard_tool as _openai_guard_tool
+from mtg.adapters.openai import GuardedTool, guard_tool as _openai_guard_tool
 
 
 def guard_tool(tool_def: dict) -> GuardedTool:

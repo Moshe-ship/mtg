@@ -5,7 +5,7 @@ filter dialect_observed to Arabic slots (review finding #5)."""
 import json
 from pathlib import Path
 
-from adapters.openai import guard_tool
+from mtg.adapters.openai import guard_tool
 
 FIXTURES = Path(__file__).resolve().parent.parent / "examples"
 

@@ -12,10 +12,11 @@ from mtg.canonical import canonicalize, normalize
 from mtg.dialect import get_dialect_backend, KeywordDialectClassifier
 from mtg.morph import get_morph_backend
 from mtg.morph_fallback import SurfaceOnlyMorphBackend
-from mtg.script import detect_script, matches_required_script
+from mtg.script import detect_script, is_arabic_char, matches_required_script
 from mtg.translit import transliteration_violation_detected
 from mtg.types import (
     Analysis,
+    FACTORABLE_SLOTS,
     GuardResult,
     GuardSpec,
     Violation,
@@ -27,6 +28,53 @@ _DIALECT_CONFIDENCE_FLOOR = 0.75
 # Ambiguity threshold: if two morph analyses are within this confidence,
 # consider it ambiguous and skip canonicalization.
 _MORPH_AMBIGUITY_DELTA = 0.15
+
+# Fraction of tokens that must look non-factorable before FREE_TEXT_OVERFLOW
+# fires on a factorable slot. Spec says ">70% named-entity tokens, all-numeric".
+_FREE_TEXT_OVERFLOW_RATIO = 0.7
+
+
+def _token_looks_non_factorable(token: str) -> bool:
+    """Heuristic: does this whitespace token look like free-text filler
+    for a factorable slot (identifier, numeric, latin-only)?
+
+    Returns True for tokens that are:
+    - pure numeric (with optional sign / decimal / thousand separators)
+    - latin-dominant alphanumerics (ascii-only, id-like)
+    - pure punctuation / symbols
+    Returns False for tokens carrying any Arabic letter.
+    """
+    if not token:
+        return False
+
+    if any(is_arabic_char(ch) for ch in token):
+        return False
+
+    stripped = token.strip(".,;:!?()[]{}\"'،؛")
+    if not stripped:
+        return True
+
+    if stripped.replace(".", "").replace(",", "").replace("-", "").replace("_", "").isdigit():
+        return True
+
+    ascii_alnum = sum(1 for c in stripped if c.isascii() and (c.isalnum() or c in "-_"))
+    if ascii_alnum / max(1, len(stripped)) >= 0.7:
+        return True
+
+    return False
+
+
+def _free_text_overflow_detected(value: str) -> tuple[bool, float]:
+    """Is `value` dominantly non-factorable content?
+
+    Returns (overflow_detected, non_factorable_fraction).
+    """
+    tokens = value.split()
+    if not tokens:
+        return False, 0.0
+    nf = sum(1 for t in tokens if _token_looks_non_factorable(t))
+    ratio = nf / len(tokens)
+    return ratio > _FREE_TEXT_OVERFLOW_RATIO, ratio
 
 
 def _validate_mode(spec: GuardSpec) -> None:
@@ -263,6 +311,53 @@ def validate_pre(value: str, spec: GuardSpec) -> GuardResult:
                     phase="pre",
                     message="multiple analyses within ambiguity threshold; skipped canonicalization",
                     details={"threshold": _MORPH_AMBIGUITY_DELTA},
+                )
+            )
+
+    # FREE_TEXT_OVERFLOW — spec says factorable slots holding mostly
+    # non-factorable content should be flagged. Applies to Arabic factorable
+    # slots; non-Arabic content is already caught by SCRIPT_VIOLATION.
+    if spec.is_factorable and value and spec.script in ("ar", "mixed", "any"):
+        overflow, ratio = _free_text_overflow_detected(value)
+        if overflow:
+            violations.append(
+                Violation(
+                    code="FREE_TEXT_OVERFLOW",
+                    severity="medium",
+                    phase="pre",
+                    message=(
+                        f"factorable slot '{spec.slot_type}' received value with "
+                        f"{ratio:.0%} non-factorable tokens; morphology is noise here"
+                    ),
+                    details={
+                        "slot_type": spec.slot_type,
+                        "non_factorable_ratio": round(ratio, 3),
+                        "threshold": _FREE_TEXT_OVERFLOW_RATIO,
+                    },
+                )
+            )
+
+    # canonical_form_required — when the schema author declared that a
+    # canonical form MUST be derivable (lemma or root_pattern), emit a
+    # high-severity violation if canonicalize() cannot succeed. This is the
+    # runtime counterpart to GuardSpec.canonical_form_required.
+    if spec.canonical_form_required and spec.canonicalization not in ("none",):
+        canonical, succeeded = canonicalize(value, spec.canonicalization, [analysis])
+        if not succeeded:
+            violations.append(
+                Violation(
+                    code="CANONICALIZATION_REQUIRED",
+                    severity="high",
+                    phase="pre",
+                    message=(
+                        f"canonical_form_required=true but '{spec.canonicalization}' "
+                        f"canonicalization could not be produced (backend={analysis.backend})"
+                    ),
+                    details={
+                        "canonicalization": spec.canonicalization,
+                        "backend": analysis.backend,
+                        "fallback_surface": canonical,
+                    },
                 )
             )
 

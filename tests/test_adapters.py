@@ -3,9 +3,9 @@
 import json
 from pathlib import Path
 
-from adapters.anthropic import guard_tool as anthropic_guard
-from adapters.hermes_fc import guard_tool as hermes_guard
-from adapters.openai import guard_tool as openai_guard
+from mtg.adapters.anthropic import guard_tool as anthropic_guard
+from mtg.adapters.hermes_fc import guard_tool as hermes_guard
+from mtg.adapters.openai import guard_tool as openai_guard
 
 EXAMPLES = Path(__file__).resolve().parent.parent / "examples"
 

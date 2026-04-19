@@ -6,7 +6,7 @@ Otherwise the flow is identical — extract x-mtg blocks, validate calls.
 
 from __future__ import annotations
 
-from adapters.openai import GuardedTool, _call_args, _extract_guards
+from mtg.adapters.openai import GuardedTool, _call_args, _extract_guards
 
 
 def guard_tool(tool_def: dict) -> GuardedTool:

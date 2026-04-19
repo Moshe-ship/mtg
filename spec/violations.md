@@ -52,6 +52,12 @@ When an ensemble of morphological backends is active (CAMeL Tools + Farasa, for 
 
 A parameter declared a factorable `slot_type` but the actual value is dominantly non-factorable (named entities, numerics). See [taxonomy.md](taxonomy.md#free_text_overflow).
 
+### `CANONICALIZATION_REQUIRED` · high
+
+The schema author declared `canonical_form_required: true` with `canonicalization: lemma` or `canonicalization: root_pattern`, but the pipeline could not produce a canonical form — typically because the morphology backend is unavailable and the surface-fallback path does not satisfy the declared canonicalization mode.
+
+This signals a configuration-time contract breach: the schema promises downstream consumers a canonical form that the current runtime cannot deliver.
+
 ## Post-call violations
 
 Post-call guards compare the tool response against the input value to detect corruption or invariant breaks. Runs only for parameters with `post_call_contract` entries.
