@@ -61,6 +61,7 @@ from mtg.repair import (
     RepairSuggestion,
     arabizi_to_arabic_naive,
     pick_repaired_value,
+    score_repair,
     suggest_repairs,
 )
 
@@ -104,5 +105,6 @@ __all__ = [
     "RepairSuggestion",
     "arabizi_to_arabic_naive",
     "pick_repaired_value",
+    "score_repair",
     "suggest_repairs",
 ]

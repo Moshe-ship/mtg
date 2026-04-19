@@ -150,72 +150,197 @@ def load_ndjson(path: Path) -> list[dict[str, Any]]:
 
 
 def render_html(card: Scorecard) -> str:
-    """Render a Scorecard as a self-contained HTML document."""
+    """Render a Scorecard as a screenshot-grade single-page HTML document.
+
+    Designed for social-media sharing: headline pass-rate up top,
+    three-column stat band, proper bar charts for each breakdown, and
+    clickable column sorting on the per-tool table. No external assets —
+    one file, copy-and-paste into a browser.
+    """
     data = card.to_dict()
     by_outcome = data["by_outcome"]
     total = data["total_receipts"] or 1
+    pass_n = by_outcome.get("pass", 0)
+    partial_n = by_outcome.get("partial", 0)
+    fail_n = by_outcome.get("fail", 0)
+    pass_pct = 100 * pass_n / total
 
-    def _bar(n: int, total: int) -> str:
-        pct = 100 * n / max(total, 1)
-        return f'<div class="bar"><div class="fill" style="width:{pct:.1f}%"></div><span>{n}</span></div>'
-
-    def _rows(items: list[tuple[str, int]]) -> str:
-        return "\n".join(
-            f"<tr><td><code>{k}</code></td><td class='num'>{v}</td><td>{_bar(v, total)}</td></tr>"
-            for k, v in items
+    def _bar_row(label: str, count: int, total: int, tone: str = "neutral") -> str:
+        pct = 100 * count / max(total, 1)
+        return (
+            f'<tr><td class="label"><code>{label}</code></td>'
+            f'<td class="num">{count}</td>'
+            f'<td class="num mute">{pct:.1f}%</td>'
+            f'<td class="barcell"><div class="bar bar-{tone}">'
+            f'<div class="fill" style="width:{pct:.1f}%"></div></div></td></tr>'
         )
 
+    def _rows(items: list[tuple[str, int]], tone: str = "neutral") -> str:
+        return "\n".join(_bar_row(k, v, total, tone) for k, v in items)
+
+    # Tool table sorted (fail desc already done in aggregate)
     tool_rows = "\n".join(
-        f"<tr><td><code>{r['tool']}</code></td>"
-        f"<td class='num'>{r['total']}</td>"
-        f"<td class='num pass'>{r['pass']}</td>"
-        f"<td class='num partial'>{r['partial']}</td>"
-        f"<td class='num fail'>{r['fail']}</td>"
-        f"<td class='num'>{r['fail_rate']:.0%}</td></tr>"
+        f'<tr><td><code>{r["tool"]}</code></td>'
+        f'<td class="num">{r["total"]}</td>'
+        f'<td class="num pass-color">{r["pass"]}</td>'
+        f'<td class="num partial-color">{r["partial"]}</td>'
+        f'<td class="num fail-color">{r["fail"]}</td>'
+        f'<td class="num strong">{r["fail_rate"]:.0%}</td></tr>'
         for r in data["per_tool"]
     )
 
-    return (
-        "<!doctype html>\n"
-        '<html><head><meta charset="utf-8"><title>MTG scorecard</title>\n'
-        "<style>\n"
-        "body{font:13px -apple-system,sans-serif;color:#111;max-width:960px;margin:2em auto;padding:0 1em}\n"
-        "h1{font-size:20px;border-bottom:1px solid #ddd;padding-bottom:.3em}\n"
-        "h2{font-size:15px;margin-top:2em;color:#555}\n"
-        "table{border-collapse:collapse;width:100%;margin:.5em 0}\n"
-        "th,td{padding:.3em .6em;text-align:left;border-bottom:1px solid #eee}\n"
-        "th{background:#f6f6f6;font-weight:600}\n"
-        ".num{text-align:right;font-variant-numeric:tabular-nums}\n"
-        ".pass{color:#2a7}.partial{color:#c80}.fail{color:#c33}\n"
-        ".bar{background:#eee;height:14px;border-radius:2px;position:relative;overflow:hidden}\n"
-        ".bar .fill{background:#999;height:100%}\n"
-        ".bar span{position:absolute;top:0;left:4px;font-size:11px;line-height:14px;color:#fff;mix-blend-mode:difference}\n"
-        ".card{background:#fafafa;border:1px solid #eee;padding:.7em 1em;border-radius:4px;margin:.5em 0}\n"
-        "code{background:#f2f2f2;padding:1px 4px;border-radius:2px}\n"
-        "</style></head><body>\n"
-        f"<h1>MTG scorecard — {data['total_receipts']} receipts</h1>\n"
-        "<div class='card'>"
-        f"<strong>Outcomes:</strong> "
-        f"<span class='pass'>{by_outcome.get('pass', 0)} pass</span> · "
-        f"<span class='partial'>{by_outcome.get('partial', 0)} partial</span> · "
-        f"<span class='fail'>{by_outcome.get('fail', 0)} fail</span>"
-        "</div>\n"
-        "<h2>Violation codes</h2>\n"
-        "<table><thead><tr><th>Code</th><th class='num'>Count</th><th>Share</th></tr></thead>"
-        f"<tbody>{_rows(list(data['violation_codes'].items()))}</tbody></table>\n"
-        "<h2>Dialect drift</h2>\n"
-        "<table><thead><tr><th>expected → observed</th><th class='num'>Count</th><th>Share</th></tr></thead>"
-        f"<tbody>{_rows(list(data['dialect_drift_pairs'].items()))}</tbody></table>\n"
-        "<h2>Repair actions</h2>\n"
-        "<table><thead><tr><th>Action</th><th class='num'>Count</th><th>Share</th></tr></thead>"
-        f"<tbody>{_rows(list(data['repair_actions'].items()))}</tbody></table>\n"
-        "<h2>Per-tool hot spots</h2>\n"
-        "<table><thead><tr><th>Tool</th><th class='num'>Total</th>"
-        "<th class='num pass'>Pass</th><th class='num partial'>Partial</th>"
-        "<th class='num fail'>Fail</th><th class='num'>Fail%</th></tr></thead>"
-        f"<tbody>{tool_rows}</tbody></table>\n"
-        "</body></html>\n"
+    # Empty-section helper — don't render blank tables
+    def _section(title: str, items: list, body: str, tone: str = "") -> str:
+        if not items:
+            return ""
+        return f'<section class="{tone}"><h2>{title}</h2><table class="stat">{body}</table></section>'
+
+    violation_section = _section(
+        "violation codes",
+        list(data["violation_codes"].items()),
+        _rows(list(data["violation_codes"].items()), tone="warn"),
     )
+
+    drift_section = _section(
+        "dialect drift pairs",
+        list(data["dialect_drift_pairs"].items()),
+        _rows(list(data["dialect_drift_pairs"].items()), tone="warn"),
+    )
+
+    repair_section = _section(
+        "repair actions proposed",
+        list(data["repair_actions"].items()),
+        _rows(list(data["repair_actions"].items()), tone="good"),
+    )
+
+    severity_section = _section(
+        "severity distribution",
+        list(data["violation_severity"].items()),
+        _rows(list(data["violation_severity"].items()), tone="warn"),
+    )
+
+    return f"""<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MTG scorecard — {data['total_receipts']} receipts</title>
+<style>
+  :root {{
+    --bg: #fff; --fg: #111; --muted: #6b7280; --border: #e5e7eb;
+    --pass: #10b981; --partial: #f59e0b; --fail: #ef4444;
+    --good: #10b981; --warn: #f59e0b; --neutral: #6b7280;
+    --card-bg: #f9fafb; --mono: ui-monospace,SFMono-Regular,Menlo,monospace;
+    --sans: -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+  }}
+  * {{ box-sizing: border-box; }}
+  body {{
+    font: 14px/1.5 var(--sans); color: var(--fg); background: var(--bg);
+    max-width: 1000px; margin: 0 auto; padding: 2.5rem 1.5rem 4rem;
+  }}
+  header {{ border-bottom: 1px solid var(--border); padding-bottom: 1.25rem; margin-bottom: 2rem; }}
+  header h1 {{ font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 .5rem; }}
+  .headline {{ display: flex; align-items: baseline; gap: 1rem; flex-wrap: wrap; }}
+  .headline .pct {{ font: 600 48px/1 var(--sans); font-variant-numeric: tabular-nums; }}
+  .headline .caption {{ color: var(--muted); font-size: 13px; }}
+  .stats {{
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem;
+    margin: 1.5rem 0 0;
+  }}
+  .stat-tile {{
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: .85rem 1rem; background: var(--card-bg);
+  }}
+  .stat-tile .label {{ font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }}
+  .stat-tile .value {{ font: 600 22px/1.2 var(--sans); font-variant-numeric: tabular-nums; margin-top: .2rem; }}
+  .stat-tile.pass .value {{ color: var(--pass); }}
+  .stat-tile.partial .value {{ color: var(--partial); }}
+  .stat-tile.fail .value {{ color: var(--fail); }}
+  section {{ margin-top: 2.5rem; }}
+  h2 {{
+    font: 600 11px/1 var(--sans); text-transform: uppercase; letter-spacing: .08em;
+    color: var(--muted); margin: 0 0 .75rem;
+  }}
+  table {{ width: 100%; border-collapse: collapse; }}
+  table.stat td {{ padding: .45rem .4rem; border-bottom: 1px solid var(--border); vertical-align: middle; }}
+  table.stat td.label {{ width: 30%; }}
+  table.stat td.label code {{ font: 12px/1 var(--mono); background: #f3f4f6; padding: 3px 6px; border-radius: 3px; color: #111; }}
+  table.stat td.num {{ width: 9%; text-align: right; font-variant-numeric: tabular-nums; }}
+  table.stat td.mute {{ color: var(--muted); font-size: 12px; }}
+  table.stat td.barcell {{ width: 45%; padding-left: 1rem; }}
+  .bar {{ height: 8px; background: #f3f4f6; border-radius: 2px; overflow: hidden; }}
+  .bar .fill {{ height: 100%; background: var(--neutral); transition: width .2s; }}
+  .bar-good .fill {{ background: var(--good); }}
+  .bar-warn .fill {{ background: var(--warn); }}
+  table.tools {{ width: 100%; margin-top: .5rem; }}
+  table.tools th, table.tools td {{ padding: .5rem .4rem; text-align: left; border-bottom: 1px solid var(--border); font-size: 13px; }}
+  table.tools th {{ font: 600 11px/1 var(--sans); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); background: var(--card-bg); cursor: pointer; user-select: none; }}
+  table.tools th.num, table.tools td.num {{ text-align: right; font-variant-numeric: tabular-nums; }}
+  table.tools td.strong {{ font-weight: 600; }}
+  .pass-color {{ color: var(--pass); }}
+  .partial-color {{ color: var(--partial); }}
+  .fail-color {{ color: var(--fail); }}
+  footer {{ margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: 11px; color: var(--muted); }}
+  footer code {{ font: 11px/1 var(--mono); }}
+</style>
+</head><body>
+<header>
+  <h1>MTG scorecard</h1>
+  <div class="headline">
+    <span class="pct">{pass_pct:.1f}%</span>
+    <span class="caption">pass rate · {pass_n} / {total} receipts</span>
+  </div>
+  <div class="stats">
+    <div class="stat-tile pass"><div class="label">pass</div><div class="value">{pass_n}</div></div>
+    <div class="stat-tile partial"><div class="label">partial</div><div class="value">{partial_n}</div></div>
+    <div class="stat-tile fail"><div class="label">fail</div><div class="value">{fail_n}</div></div>
+  </div>
+</header>
+
+{violation_section}
+{severity_section}
+{drift_section}
+{repair_section}
+
+<section>
+  <h2>per-tool hot spots</h2>
+  <table class="tools" id="tools">
+    <thead><tr>
+      <th onclick="sortT(0,'str')">tool</th>
+      <th class="num" onclick="sortT(1,'num')">total</th>
+      <th class="num" onclick="sortT(2,'num')">pass</th>
+      <th class="num" onclick="sortT(3,'num')">partial</th>
+      <th class="num" onclick="sortT(4,'num')">fail</th>
+      <th class="num" onclick="sortT(5,'num')">fail %</th>
+    </tr></thead>
+    <tbody>{tool_rows}</tbody>
+  </table>
+</section>
+
+<footer>
+  Generated by <code>mtg.report</code>. Single-page, self-contained. No external assets, no tracking.
+</footer>
+
+<script>
+function sortT(col, kind) {{
+  var tbody = document.querySelector('#tools tbody');
+  var rows = Array.from(tbody.rows);
+  var dir = tbody.dataset.sortCol == col && tbody.dataset.sortDir == 'asc' ? 'desc' : 'asc';
+  rows.sort(function(a,b){{
+    var av = a.cells[col].textContent.trim();
+    var bv = b.cells[col].textContent.trim();
+    if (kind === 'num') {{
+      av = parseFloat(av.replace('%','')) || 0;
+      bv = parseFloat(bv.replace('%','')) || 0;
+      return dir === 'asc' ? av - bv : bv - av;
+    }}
+    return dir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
+  }});
+  rows.forEach(function(r){{ tbody.appendChild(r); }});
+  tbody.dataset.sortCol = col; tbody.dataset.sortDir = dir;
+}}
+</script>
+</body></html>
+"""
 
 
 __all__ = [

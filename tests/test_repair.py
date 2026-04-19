@@ -141,6 +141,103 @@ def test_repair_suggestion_to_dict_round_trip():
     assert d["details"] == {"k": "v"}
 
 
+def test_score_repair_arabizi_to_arabic_clean_output():
+    """Arabizi→Arabic with pure Arabic output, no BiDi, reasonable length → 1.0."""
+    from mtg.repair import score_repair
+
+    score = score_repair(
+        original="abi a7jez",
+        proposed="ابي احجز",
+        action="arabizi_to_arabic",
+    )
+    assert score == 1.0
+
+
+def test_score_repair_arabizi_output_not_arabic_fails():
+    """If the arabizi→arabic repair somehow produced Latin output, 0.0."""
+    from mtg.repair import score_repair
+
+    score = score_repair(
+        original="abi a7jez",
+        proposed="abi ahjez",  # still Latin
+        action="arabizi_to_arabic",
+    )
+    assert score == 0.0
+
+
+def test_score_repair_length_blowup_fails():
+    """A repair that grows the string >3× is rejected."""
+    from mtg.repair import score_repair
+
+    score = score_repair(
+        original="abi",
+        proposed="ابي" * 50,  # 150+ chars for a 3-char input
+        action="arabizi_to_arabic",
+    )
+    assert score == 0.0
+
+
+def test_score_repair_new_bidi_chars_fail():
+    """Repair that introduced BiDi controls is broken."""
+    from mtg.repair import score_repair
+
+    score = score_repair(
+        original="abi a7jez",
+        proposed="ابي \u202eاحجز",  # injected RLO
+        action="arabizi_to_arabic",
+    )
+    assert score == 0.0
+
+
+def test_score_repair_attach_canonical_normalized_idempotent():
+    """canonicalization='normalized' is deterministic → full credit."""
+    from mtg.repair import score_repair
+    from mtg.types import GuardSpec
+
+    spec = GuardSpec.from_dict({
+        "slot_type": "named_entity",
+        "script": "ar",
+        "canonicalization": "normalized",
+    })
+    score = score_repair(
+        original="أحمد",
+        proposed="احمد",  # alef normalized
+        action="attach_canonical",
+        spec=spec,
+    )
+    assert score == 1.0
+
+
+def test_score_repair_attach_canonical_non_normalized_needs_review():
+    """canonicalization='lemma' fallback yields normalized form but
+    semantically weaker — 0.7 (needs-review)."""
+    from mtg.repair import score_repair
+    from mtg.types import GuardSpec
+
+    spec = GuardSpec.from_dict({
+        "slot_type": "inflected_request_form",
+        "script": "ar",
+        "canonicalization": "lemma",
+        "morphologically_productive": True,
+    })
+    score = score_repair(
+        original="أحجز",
+        proposed="احجز",
+        action="attach_canonical",
+        spec=spec,
+    )
+    assert score == 0.7
+
+
+def test_score_repair_asserts_on_advisory_action():
+    """Caller must filter proposed=None before calling score_repair."""
+    import pytest
+    from mtg.repair import score_repair
+
+    with pytest.raises(AssertionError):
+        score_repair(original="x", proposed=None, action="suggest_dialect_rewrite")
+
+
 def test_guard_result_to_dict_includes_repairs():
     """Regression: GuardResult.to_dict must surface repairs for downstream
     receipt integration."""

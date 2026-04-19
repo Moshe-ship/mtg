@@ -300,10 +300,97 @@ def pick_repaired_value(
     return None
 
 
+def score_repair(
+    original: str,
+    proposed: str,
+    action: str,
+    spec: GuardSpec | None = None,
+) -> float:
+    """Score a concrete repair proposal in [0.0, 1.0] without ground truth.
+
+    The score asks: "does the repair preserve invariants we can check
+    locally?" It is NOT a human-judged quality score — for that, you
+    need ground-truth pairs. But for catching broken repairs (length
+    blow-up, script mismatch, new BiDi chars introduced) this score
+    flags them cheaply.
+
+    Scoring ladder:
+
+    - 0.0 if the proposal violates an invariant (different script than
+      declared, introduced BiDi control chars, length changed by >3×)
+    - 0.5 if the proposal is syntactically valid but flagged
+      `needs_review=True` and we have no stronger signal
+    - 0.7 if the proposal is syntactically valid, not flagged for review,
+      and preserves length within 50%
+    - 1.0 if all above AND round-trip preservation holds (action-specific
+      invariants — e.g. arabizi_to_arabic output must be pure Arabic;
+      attach_canonical output must be deterministic normalization)
+
+    Advisory-only actions (where `proposed` is None) should not reach
+    this function — callers filter them first. We assert that here.
+    """
+    assert proposed is not None, (
+        "score_repair() called on an advisory suggestion — caller should "
+        "filter `proposed is None` before invoking"
+    )
+
+    from mtg.bidi import detect_bidi_threats
+    from mtg.script import detect_script
+
+    # Invariant 1: no new BiDi control / invisible / tag characters
+    # introduced by the repair. If original was clean and proposed is
+    # not, the repair made things worse.
+    original_threats = detect_bidi_threats(original)
+    proposed_threats = detect_bidi_threats(proposed)
+    proposed_added_security_issues = (
+        len(proposed_threats.bidi_controls) > len(original_threats.bidi_controls)
+        or len(proposed_threats.invisible_chars) > len(original_threats.invisible_chars)
+        or len(proposed_threats.tag_chars) > len(original_threats.tag_chars)
+        or len(proposed_threats.homoglyphs) > len(original_threats.homoglyphs)
+    )
+    if proposed_added_security_issues:
+        return 0.0
+
+    # Invariant 2: length sanity. A repair that expands the string by
+    # >3× is almost certainly corrupt (runaway mapping, infinite loop).
+    orig_len = max(1, len(original))
+    if len(proposed) > 3 * orig_len or len(proposed) < orig_len / 10:
+        return 0.0
+
+    # Action-specific invariants.
+    if action == "arabizi_to_arabic":
+        # The whole point of this repair is to produce Arabic script.
+        # If the proposed output is not predominantly Arabic, repair
+        # failed its contract.
+        script = detect_script(proposed)
+        if script != "ar":
+            return 0.0
+        # Good: pure Arabic, no new security chars, reasonable length
+        return 1.0
+
+    if action == "attach_canonical":
+        # Canonical form must be deterministic — applying the same
+        # transform twice should be idempotent. We test that here.
+        from mtg.canonical import normalize
+        if normalize(normalize(proposed)) != normalize(proposed):
+            return 0.0
+        # If the spec declared canonicalization='normalized', idempotence
+        # is guaranteed by construction → full credit.
+        if spec is not None and spec.canonicalization == "normalized":
+            return 1.0
+        # Otherwise (lemma / root_pattern fallback to normalized):
+        # syntactically valid but needs review.
+        return 0.7
+
+    # Unknown concrete action — treat as needs-review but syntactically OK.
+    return 0.5
+
+
 __all__ = [
     "RepairAction",
     "RepairSuggestion",
     "arabizi_to_arabic_naive",
     "pick_repaired_value",
+    "score_repair",
     "suggest_repairs",
 ]

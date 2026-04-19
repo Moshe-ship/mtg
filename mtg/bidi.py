@@ -176,15 +176,50 @@ def _tokens_have_mixed_script(value: str) -> bool:
     return False
 
 
+def _arabic_indic_digit_is_contextually_legitimate(value: str) -> bool:
+    """Are Arabic-Indic digits (U+0660..U+0669) in this value being used
+    as normal digits within an Arabic-script context, or is the value
+    predominantly Latin/other (suggesting laundering)?
+
+    Arabic typography uses ٠-٩ natively. `الساعة ٥` and `١٥ رمضان` are
+    normal content, not attacks. Flagging them as homoglyphs would
+    create a 5%+ false-positive rate on real Arabic tool-call content
+    (measured via scripts/fp_analysis.py).
+
+    Similarly for Persian digits U+06F0..U+06F9 in Persian context.
+    """
+    from mtg.script import is_arabic_char, is_latin_char
+
+    ar_count = sum(1 for c in value if is_arabic_char(c))
+    latn_count = sum(1 for c in value if is_latin_char(c))
+    # If Arabic dominates, Arabic-Indic digits are expected typography.
+    return ar_count > latn_count
+
+
+# Codepoint ranges for script-native digits that should be treated as
+# contextually-legitimate when the value is dominantly Arabic.
+_ARABIC_INDIC_DIGITS = frozenset(chr(cp) for cp in range(0x0660, 0x066A))
+_PERSIAN_DIGITS = frozenset(chr(cp) for cp in range(0x06F0, 0x06FA))
+_SCRIPT_NATIVE_DIGITS = _ARABIC_INDIC_DIGITS | _PERSIAN_DIGITS
+
+
 def detect_bidi_threats(value: str) -> BidiFinding:
     """Scan `value` for BiDi control smuggling, invisible chars, tag
     characters, and homoglyphs.
 
     Pure scan; no I/O. Returns a frozen BidiFinding — caller decides
     whether to treat as violations.
+
+    Context-aware: Arabic-Indic / Persian digits in Arabic-dominant
+    content are NOT treated as homoglyphs (they are normal typography).
+    A mixed Latin+Arabic-Indic value (e.g. "acct ١٢٣" where "acct" is
+    Latin and ١٢٣ is Arabic-Indic) IS flagged because the script mix
+    makes the digit substitution the laundering signal.
     """
     if not value:
         return BidiFinding()
+
+    native_digits_legitimate = _arabic_indic_digit_is_contextually_legitimate(value)
 
     controls: list[str] = []
     marks: list[str] = []
@@ -199,6 +234,9 @@ def detect_bidi_threats(value: str) -> BidiFinding:
         elif ch in INVISIBLE_CHARS:
             invisible.append(ch)
         elif ch in HOMOGLYPH_LATIN_LOOKALIKES:
+            if ch in _SCRIPT_NATIVE_DIGITS and native_digits_legitimate:
+                # Expected Arabic/Persian digit usage — not a homoglyph attack.
+                continue
             homoglyphs.append((ch, HOMOGLYPH_LATIN_LOOKALIKES[ch]))
 
     tag_chars = tuple(_contains_tag_char(value))

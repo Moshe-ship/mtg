@@ -87,10 +87,36 @@ def test_detects_cyrillic_homoglyphs():
     assert f.homoglyphs[0] == ("\u0430", "a")
 
 
-def test_detects_arabic_indic_digit_homoglyph():
-    """Arabic-Indic '٠' U+0660 vs Western '0' U+0030."""
-    f = detect_bidi_threats("acct\u0660\u0661\u0662")  # "acct٠١٢"
+def test_detects_arabic_indic_digit_homoglyph_in_latin_context():
+    """Arabic-Indic '٠' U+0660 vs Western '0' U+0030 — IS a homoglyph
+    attack when the surrounding context is Latin (laundering)."""
+    f = detect_bidi_threats("acct\u0660\u0661\u0662")  # "acct" Latin + ٠١٢
     assert len(f.homoglyphs) == 3
+
+
+def test_arabic_indic_digits_in_arabic_context_are_not_homoglyphs():
+    """Regression from scripts/fp_analysis.py: Arabic-Indic digits in
+    Arabic-dominant content are normal typography, not attacks.
+    `الساعة ٥` is an Arabic phrase, not a script-laundering payload."""
+    # Real Arabic phrases with Arabic-Indic digits
+    for phrase in [
+        "الساعة ٥",
+        "١٥ رمضان",
+        "تعالى بكره الساعة ٥",
+        "احجز فندق من يوم ١٥ رمضان إلى ٢٠ رمضان",
+    ]:
+        f = detect_bidi_threats(phrase)
+        assert f.homoglyphs == (), (
+            f"Arabic-Indic digits in Arabic context should not flag: {phrase!r} "
+            f"got {f.homoglyphs}"
+        )
+
+
+def test_persian_digits_in_persian_context_are_not_homoglyphs():
+    """Same principle for Persian digits U+06F0..U+06F9."""
+    phrase = "ساعت \u06f5 بعدازظهر"  # "ساعت ۵ بعدازظهر" — 5 PM
+    f = detect_bidi_threats(phrase)
+    assert f.homoglyphs == ()
 
 
 def test_detects_mixed_script_within_token():
