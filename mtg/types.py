@@ -60,7 +60,17 @@ class GuardSpec:
     post_call_contract: tuple[str, ...] = ()
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "GuardSpec":
+    def from_dict(cls, data: dict[str, Any], validate: bool = True) -> "GuardSpec":
+        """Parse an x-mtg block into a GuardSpec.
+
+        `validate=True` (default) enforces spec/mtg.schema.json — unknown keys
+        or bad enum values raise MTGSchemaError. Pass `validate=False` for the
+        legacy lenient path (not recommended; preserved for adapter internals
+        that may receive partial blocks).
+        """
+        if validate:
+            from mtg.schema_validator import validate_x_mtg_strict
+            validate_x_mtg_strict(data)
         contract = data.get("post_call_contract") or []
         return cls(
             slot_type=data.get("slot_type", "free_text"),

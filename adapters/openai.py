@@ -59,7 +59,11 @@ class GuardedTool:
         for param_name, spec in self.guards.items():
             value = args.get(param_name, "")
             per_param[param_name] = validate_pre(str(value), spec)
-        return ValidationReport(tool=self.name, per_param=per_param)
+        return ValidationReport(
+            tool=self.name,
+            per_param=per_param,
+            specs=dict(self.guards),
+        )
 
     def validate_response(self, call: dict, response: dict) -> ValidationReport:
         """Run both pre-call and post-call guards. `response` is the tool output.
@@ -74,7 +78,11 @@ class GuardedTool:
             pre = validate_pre(str(call_args.get(param_name, "")), spec)
             post = validate_post(pre, str(resp_args.get(param_name, "")), spec)
             per_param[param_name] = post
-        return ValidationReport(tool=self.name, per_param=per_param)
+        return ValidationReport(
+            tool=self.name,
+            per_param=per_param,
+            specs=dict(self.guards),
+        )
 
 
 def _call_args(payload: dict) -> dict:

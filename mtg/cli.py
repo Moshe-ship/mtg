@@ -36,11 +36,47 @@ def _extract_guards(tool_def: dict) -> dict[str, GuardSpec]:
 
 
 def cmd_check_schema(args: argparse.Namespace) -> int:
+    """Validate every x-mtg block in a tool definition against spec/mtg.schema.json.
+
+    Exits 0 if all blocks pass, 2 if any fail. Prints per-field violations to
+    stderr on failure.
+    """
+    from mtg.schema_validator import validate_x_mtg
+
     tool = _load_json(args.tool)
-    guards = _extract_guards(tool)
-    if not guards:
+    # Pull raw blocks (pre-parse) so validation reports point at the source keys.
+    if "function" in tool:
+        props = tool["function"].get("parameters", {}).get("properties", {})
+    elif "parameters" in tool:
+        props = tool["parameters"].get("properties", {})
+    elif "input_schema" in tool:
+        props = tool["input_schema"].get("properties", {})
+    else:
+        props = (tool.get("properties") or {})
+
+    found = 0
+    failures: dict[str, list[str]] = {}
+    for name, prop in props.items():
+        if not isinstance(prop, dict) or "x-mtg" not in prop:
+            continue
+        found += 1
+        errors = validate_x_mtg(prop["x-mtg"])
+        if errors:
+            failures[name] = errors
+
+    if found == 0:
         print("No x-mtg annotations found.")
         return 0
+
+    if failures:
+        print(f"Schema validation FAILED — {len(failures)}/{found} guards invalid:", file=sys.stderr)
+        for name, errors in failures.items():
+            for err in errors:
+                print(f"  {name}: {err}", file=sys.stderr)
+        return 2
+
+    # Success — print the parsed summary
+    guards = _extract_guards(tool)
     for name, spec in guards.items():
         print(f"  {name}: slot={spec.slot_type} script={spec.script} dialect={spec.dialect_expected} mode={spec.mode}")
     return 0
