@@ -42,10 +42,99 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Run cross-repo smoke
+      - name: Run cross-repo smoke (source install)
         env:
           MTG: ${{ github.workspace }}/mtg
           TOOLPROOF: ${{ github.workspace }}/toolproof
           HURMOZ: ${{ github.workspace }}/hurmoz
         run: |
           bash mtg/scripts/cross_repo_smoke.sh
+
+  build-artifacts:
+    # Wheel + sdist smoke: proves package_data and packaging config ship
+    # correctly (catches bugs that editable / source installs mask).
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.12"]
+
+    steps:
+      - name: Check out mtg (self)
+        uses: actions/checkout@v4
+        with:
+          path: mtg
+
+      - name: Check out toolproof
+        uses: actions/checkout@v4
+        with:
+          repository: Moshe-ship/toolproof
+          path: toolproof
+
+      - name: Check out hurmoz
+        uses: actions/checkout@v4
+        with:
+          repository: Moshe-ship/hurmoz
+          path: hurmoz
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install build frontend
+        run: python -m pip install --quiet --upgrade pip build
+
+      - name: Build mtg wheel + sdist
+        run: |
+          cd mtg
+          python -m build --outdir ../dist-mtg
+
+      - name: Build toolproof wheel + sdist
+        run: |
+          cd toolproof
+          python -m build --outdir ../dist-toolproof
+
+      - name: Install from wheels (NOT source) + run smoke
+        env:
+          HURMOZ: ${{ github.workspace }}/hurmoz
+        run: |
+          python -m venv /tmp/wheel-venv
+          /tmp/wheel-venv/bin/pip install --quiet --upgrade pip
+          /tmp/wheel-venv/bin/pip install --quiet dist-mtg/*.whl dist-toolproof/*.whl
+          # Assert the schema bundled in the wheel actually loads and
+          # the Hurmoz dialect variants flow through correctly.
+          /tmp/wheel-venv/bin/python - <<'PY'
+          import json, os
+          from pathlib import Path
+          import mtg
+          from mtg.adapters.openai import guard_tool
+          from toolproof.mtg_bridge import receipt_from_mtg_run
+
+          # Schema must load from the installed wheel (not repo-relative).
+          schema = mtg.get_schema()
+          assert "slot_type" in schema["properties"], "bundled schema broken"
+
+          schemas = Path(os.environ["HURMOZ"]) / "tool-schemas"
+          gulf = json.loads((schemas / "send_message_gulf.json").read_text(encoding="utf-8"))
+          wrapped = guard_tool(gulf)
+          report = wrapped.validate_call({"arguments": {
+              "recipient": "أحمد", "platform": "whatsapp",
+              "message": "أبي أحجز فندق في دبي",
+          }})
+          receipt = receipt_from_mtg_run(
+              tool="send_message_gulf",
+              guards=report.to_dict()["per_param"],
+              arguments={},
+          )
+          assert receipt.dialect_expected == "gulf"
+          assert receipt.outcome == "pass"
+          assert receipt.verify_integrity()
+          print("WHEEL SMOKE: OK")
+          PY
+
+      - name: Install from sdist + re-smoke schema load
+        run: |
+          python -m venv /tmp/sdist-venv
+          /tmp/sdist-venv/bin/pip install --quiet --upgrade pip
+          /tmp/sdist-venv/bin/pip install --quiet dist-mtg/*.tar.gz dist-toolproof/*.tar.gz
+          /tmp/sdist-venv/bin/python -c "import mtg; assert mtg.get_schema()['type'] == 'object'; print('SDIST SMOKE: OK')"

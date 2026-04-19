@@ -142,6 +142,13 @@ class GuardResult:
     analysis: Analysis
     violations: tuple[Violation, ...]
     mode: str
+    # Reconciled-mode: proposed repairs. Empty tuple in advisory mode.
+    # Each element is a mtg.repair.RepairSuggestion serialized to dict via
+    # to_dict(); runtime usage keeps the frozen dataclass reference.
+    repairs: tuple = field(default_factory=tuple)
+    # Reconciled-mode: the single best repaired surface, or None. Callers
+    # that want to replay validation on the repaired value use this.
+    repaired_surface: str | None = None
 
     @property
     def outcome(self) -> str:
@@ -156,13 +163,21 @@ class GuardResult:
         return "pass"
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        out: dict[str, Any] = {
             "surface": self.surface,
             "analysis": self.analysis.to_dict(),
             "pre_call_violations": [v.to_dict() for v in self.violations if v.phase == "pre"],
             "post_call_violations": [v.to_dict() for v in self.violations if v.phase == "post"],
             "mode": self.mode,
         }
+        if self.repairs:
+            out["repairs"] = [
+                r.to_dict() if hasattr(r, "to_dict") else dict(r)
+                for r in self.repairs
+            ]
+        if self.repaired_surface is not None:
+            out["repaired_surface"] = self.repaired_surface
+        return out
 
 
 @dataclass(frozen=True)

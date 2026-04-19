@@ -57,6 +57,12 @@ from mtg.schema_validator import (
     validate_x_mtg,
     validate_x_mtg_strict,
 )
+from mtg.repair import (
+    RepairSuggestion,
+    arabizi_to_arabic_naive,
+    pick_repaired_value,
+    suggest_repairs,
+)
 
 
 def get_schema() -> dict:
@@ -94,4 +100,9 @@ __all__ = [
     "load_schema",
     "validate_x_mtg",
     "validate_x_mtg_strict",
+    # Reconciled-mode repair primitives (public)
+    "RepairSuggestion",
+    "arabizi_to_arabic_naive",
+    "pick_repaired_value",
+    "suggest_repairs",
 ]

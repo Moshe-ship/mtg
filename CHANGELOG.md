@@ -2,6 +2,18 @@
 
 All notable changes to MTG (Morphological Type Guards).
 
+## Unreleased — reliability runtime (reconciled mode + report CLI)
+
+### Added
+
+- **Reconciled mode** (`mode: "reconciled"` no longer raises). Runs the same detection as advisory, then emits `RepairSuggestion` records for the subset of violations that can be repaired deterministically: Arabizi → Arabic (naive reverse transliteration), canonical-form attach (always-safe normalized fallback when `canonical_form_required=true` and the backend is unavailable). Dialect drift is advisory-only (`proposed=None`) because rewriting across dialects requires a generative model; free-text overflow emits a schema-review suggestion, not a value fix. Repairs are never applied silently — each carries `needs_review` and `rationale`.
+- **`mtg.repair`** module — `RepairSuggestion`, `arabizi_to_arabic_naive`, `suggest_repairs`, `pick_repaired_value`. All exported at top level as `mtg.RepairSuggestion`, `mtg.arabizi_to_arabic_naive`, etc.
+- **`GuardResult.repairs`** and **`GuardResult.repaired_surface`** — populated in reconciled mode, serialized via `to_dict()`.
+- **`mtg report` CLI** — aggregates an NDJSON receipt chain (mtg-native or ToolProof) into a scorecard. Supports `--html` (self-contained single-file HTML with bar charts and per-tool fail-rate table) and `--json`. Aggregates outcomes, violation histogram with severity, dialect-drift pairs (`expected→observed` counts), repair action counts, and per-tool hot spots sorted by fail-rate.
+- **`mtg.report`** module — `Scorecard`, `ScorecardRow`, `aggregate`, `load_ndjson`, `render_html`. Accepts both flat-`mtg_violations` (ToolProof) and nested-`guards[param].pre_call_violations` (mtg-native) shapes.
+- **Wheel/sdist CI check** — cross-repo-smoke.yml gains a `build-artifacts` job that `python -m build`s mtg + toolproof and installs from `dist/*.whl` and `dist/*.tar.gz` into fresh venvs before running the end-to-end smoke. Catches packaging bugs (missing package data, manifest drift) that editable installs mask.
+- **Router example integration in CI** — `scripts/cross_repo_smoke.sh` now runs `hurmoz/examples/dialect_router.py` after the smoke tests and invokes `mtg report` on the resulting chain.
+
 ## 0.1.0 — initial public release
 
 ### Added

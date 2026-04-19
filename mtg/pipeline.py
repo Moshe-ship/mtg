@@ -78,13 +78,19 @@ def _free_text_overflow_detected(value: str) -> tuple[bool, float]:
 
 
 def _validate_mode(spec: GuardSpec) -> None:
-    if spec.mode == "reconciled":
-        raise NotImplementedError(
-            "reconciled mode is defined in spec/resolution.md but not shipped in v0.1.0"
-        )
+    """Check that `spec.mode` is implemented in the current runtime.
+
+    - `advisory`   — always supported.
+    - `reconciled` — supported since v0.2.0: runs detection, then emits
+                     RepairSuggestion records via mtg.repair; proposals
+                     are never applied silently.
+    - `enforced`   — NOT shipped; policy decisions happen at the caller.
+    """
     if spec.mode == "enforced":
         raise NotImplementedError(
-            "enforced mode is defined in spec/resolution.md but not shipped in v0.1.0"
+            "enforced mode is defined in spec/resolution.md but not shipped; "
+            "use 'reconciled' and let the caller decide whether to block on "
+            "high-severity outcomes"
         )
 
 
@@ -389,11 +395,25 @@ def validate_pre(value: str, spec: GuardSpec) -> GuardResult:
                 )
             )
 
+    # Reconciled mode — emit repair suggestions for the subset of
+    # violations that can be meaningfully repaired. Advisory mode never
+    # calls repair. See mtg/repair.py for the repair policy.
+    repairs: tuple = ()
+    repaired_surface: str | None = None
+    if spec.mode == "reconciled" and violations:
+        from mtg.repair import pick_repaired_value, suggest_repairs
+
+        repair_list = suggest_repairs(value, spec, analysis, violations)
+        repairs = tuple(repair_list)
+        repaired_surface = pick_repaired_value(value, repair_list)
+
     return GuardResult(
         surface=value,
         analysis=analysis,
         violations=tuple(violations),
         mode=spec.mode,
+        repairs=repairs,
+        repaired_surface=repaired_surface,
     )
 
 

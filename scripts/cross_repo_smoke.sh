@@ -95,4 +95,23 @@ print(f"  variants tested: {[v for v, _ in results]}")
 print(f"  outcomes: {by_variant}")
 PY
 
+echo ">> smoke passed; running closed-loop router example from Hurmoz"
+
+"$VENV/bin/python" "$HURMOZ_DIR/examples/dialect_router.py" > /tmp/router-output.txt
+grep -q "signed receipts" /tmp/router-output.txt || {
+  echo "router example did not produce the expected banner" >&2
+  cat /tmp/router-output.txt
+  exit 1
+}
+
+echo ">> router example OK"
+
+"$VENV/bin/mtg" report "$HOME/.toolproof/dialect_router_chain.ndjson" --json /tmp/router-scorecard.json > /tmp/report-output.txt
+grep -q "receipts:" /tmp/report-output.txt || {
+  echo "mtg report did not produce expected output" >&2
+  cat /tmp/report-output.txt
+  exit 1
+}
+
+echo ">> report CLI OK"
 echo ">> done"

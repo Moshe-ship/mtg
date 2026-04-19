@@ -112,6 +112,59 @@ def cmd_receipt_verify(args: argparse.Namespace) -> int:
     return 1
 
 
+def cmd_report(args: argparse.Namespace) -> int:
+    """Aggregate a receipt chain into a JSON and/or HTML scorecard.
+
+    Accepts both mtg-native receipt chains (mtg/receipts.py) and ToolProof
+    JSONL receipt logs (both have compatible JSON shapes for the keys the
+    aggregator reads).
+    """
+    from mtg.report import aggregate, load_ndjson, render_html
+
+    path = Path(args.path)
+    if not path.exists():
+        print(f"chain not found: {path}", file=sys.stderr)
+        return 2
+
+    receipts = load_ndjson(path)
+    card = aggregate(receipts)
+    data = card.to_dict()
+
+    wrote: list[str] = []
+    if args.json:
+        Path(args.json).write_text(
+            json.dumps(data, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        wrote.append(f"json → {args.json}")
+    if args.html:
+        Path(args.html).write_text(render_html(card), encoding="utf-8")
+        wrote.append(f"html → {args.html}")
+
+    # Human summary on stdout
+    print(f"receipts: {data['total_receipts']}")
+    print(f"outcomes: {data['by_outcome']}")
+    if data["violation_codes"]:
+        print("top violations:")
+        for code, n in list(data["violation_codes"].items())[:5]:
+            print(f"  {code}: {n}")
+    if data["dialect_drift_pairs"]:
+        print("dialect drift:")
+        for pair, n in list(data["dialect_drift_pairs"].items())[:5]:
+            print(f"  {pair}: {n}")
+    if data["repair_actions"]:
+        print("repairs proposed:")
+        for action, n in list(data["repair_actions"].items())[:5]:
+            print(f"  {action}: {n}")
+    if wrote:
+        print("wrote: " + ", ".join(wrote))
+    if not args.json and not args.html:
+        # If no output files requested, dump the JSON to stdout too.
+        print()
+        print(json.dumps(data, ensure_ascii=False, indent=2))
+    return 0
+
+
 def main() -> int:
     p = argparse.ArgumentParser(prog="mtg", description="MTG — Morphological Type Guards")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -128,6 +181,15 @@ def main() -> int:
     sp = sub.add_parser("receipt-verify", help="Verify a receipt hash chain NDJSON")
     sp.add_argument("path", help="Path to chain.ndjson")
     sp.set_defaults(fn=cmd_receipt_verify)
+
+    sp = sub.add_parser(
+        "report",
+        help="Aggregate a receipt chain into a scorecard (JSON + HTML)",
+    )
+    sp.add_argument("path", help="Path to chain.ndjson (mtg-native or ToolProof)")
+    sp.add_argument("--json", metavar="PATH", help="Write scorecard JSON to PATH")
+    sp.add_argument("--html", metavar="PATH", help="Write scorecard HTML to PATH")
+    sp.set_defaults(fn=cmd_report)
 
     args = p.parse_args()
     return args.fn(args)

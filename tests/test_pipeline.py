@@ -55,13 +55,100 @@ def test_dialect_drift_when_wrong_dialect():
     assert "DIALECT_DRIFT" in codes
 
 
-def test_reconciled_mode_not_implemented():
-    spec = GuardSpec.from_dict({"slot_type": "free_text", "script": "ar", "mode": "reconciled"})
-    with pytest.raises(NotImplementedError):
-        validate_pre("أبي أحجز", spec)
+def test_reconciled_mode_emits_repairs_for_arabizi():
+    """v0.2.0: reconciled mode no longer raises. It runs the same
+    detection as advisory and emits repair suggestions for the subset of
+    violations we can repair safely."""
+    spec = GuardSpec.from_dict({
+        "slot_type": "inflected_request_form",
+        "script": "ar",
+        "dialect_expected": "gulf",
+        "transliteration_allowed": False,
+        "morphologically_productive": True,
+        "mode": "reconciled",
+    })
+    result = validate_pre("abi a7jez funduq", spec)
+    codes = {v.code for v in result.violations}
+    # Same detections fire as advisory mode
+    assert "SCRIPT_VIOLATION" in codes
+    assert "TRANSLITERATION_VIOLATION" in codes
+    # NEW: reconciled mode attaches repairs
+    assert result.repairs, "expected at least one repair suggestion"
+    actions = {r.action for r in result.repairs}
+    assert "arabizi_to_arabic" in actions
+    # The best repair was selected as repaired_surface
+    assert result.repaired_surface is not None
+    # It contains Arabic characters (not just Latin)
+    assert any("\u0600" <= ch <= "\u06FF" for ch in result.repaired_surface)
 
 
-def test_enforced_mode_not_implemented():
+def test_advisory_mode_emits_no_repairs():
+    """Advisory mode must keep repairs empty — no behavior change."""
+    spec = GuardSpec.from_dict({
+        "slot_type": "inflected_request_form",
+        "script": "ar",
+        "transliteration_allowed": False,
+        "mode": "advisory",
+    })
+    result = validate_pre("abi a7jez", spec)
+    assert result.repairs == ()
+    assert result.repaired_surface is None
+
+
+def test_reconciled_mode_clean_input_no_repairs():
+    """A clean Gulf-Arabic input in reconciled mode emits no repairs."""
+    spec = GuardSpec.from_dict({
+        "slot_type": "inflected_request_form",
+        "script": "ar",
+        "dialect_expected": "gulf",
+        "morphologically_productive": True,
+        "mode": "reconciled",
+    })
+    result = validate_pre("أبي أحجز فندق في دبي", spec)
+    assert result.repaired_surface is None
+    # Reconciled mode only emits repairs when there are violations to repair;
+    # morph ambiguity / low-severity backend notes do not trigger repair.
+    repair_actions = {r.action for r in result.repairs}
+    assert "arabizi_to_arabic" not in repair_actions
+
+
+def test_reconciled_mode_attaches_canonical_on_required():
+    """canonical_form_required=true + backend unavailable → repair
+    suggestion with 'attach_canonical' action."""
+    spec = GuardSpec.from_dict({
+        "slot_type": "inflected_request_form",
+        "script": "ar",
+        "morphologically_productive": True,
+        "canonicalization": "root_pattern",
+        "canonical_form_required": True,
+        "mode": "reconciled",
+    })
+    result = validate_pre("أبي أحجز", spec)
+    actions = {r.action for r in result.repairs}
+    assert "attach_canonical" in actions
+    canon = next(r for r in result.repairs if r.action == "attach_canonical")
+    assert canon.proposed is not None  # normalized form is always derivable
+
+
+def test_reconciled_mode_dialect_drift_advisory_only():
+    """Dialect-drift repair is advisory (proposed=None)."""
+    spec = GuardSpec.from_dict({
+        "slot_type": "inflected_request_form",
+        "script": "ar",
+        "dialect_expected": "gulf",
+        "dialect_enforcement": "preserve",
+        "mode": "reconciled",
+    })
+    result = validate_pre("عايز أبعت رسالة دلوقتي", spec)
+    actions = {r.action for r in result.repairs}
+    assert "suggest_dialect_rewrite" in actions
+    # We do not auto-rewrite dialects
+    dialect_sug = next(r for r in result.repairs if r.action == "suggest_dialect_rewrite")
+    assert dialect_sug.proposed is None
+
+
+def test_enforced_mode_still_not_implemented():
+    """enforced mode is a policy decision that belongs to the caller."""
     spec = GuardSpec.from_dict({"slot_type": "free_text", "script": "ar", "mode": "enforced"})
     with pytest.raises(NotImplementedError):
         validate_pre("أبي أحجز", spec)
