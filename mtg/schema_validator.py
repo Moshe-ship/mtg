@@ -1,7 +1,10 @@
-"""Validate x-mtg blocks against spec/mtg.schema.json.
+"""Validate x-mtg blocks against the bundled mtg.schema.json.
 
 Wraps jsonschema with friendly error messages. Used by GuardSpec.from_dict
 (strict) and the `mtg check-schema` CLI (strict-with-exit-code).
+
+The schema is shipped as package data at `mtg/mtg.schema.json`, so it is
+available after `pip install` just as it is in a source checkout.
 """
 
 from __future__ import annotations
@@ -13,7 +16,7 @@ from typing import Any
 from jsonschema import Draft202012Validator, ValidationError
 
 
-_SPEC_PATH = Path(__file__).resolve().parent.parent / "spec" / "mtg.schema.json"
+_SPEC_PATH = Path(__file__).resolve().parent / "mtg.schema.json"
 _VALIDATOR: Draft202012Validator | None = None
 
 
@@ -28,8 +31,18 @@ class MTGSchemaError(ValueError):
 def _get_validator() -> Draft202012Validator:
     global _VALIDATOR
     if _VALIDATOR is None:
-        with _SPEC_PATH.open(encoding="utf-8") as f:
-            schema = json.load(f)
+        # Primary: load the package-shipped schema (works after pip install).
+        if _SPEC_PATH.exists():
+            with _SPEC_PATH.open(encoding="utf-8") as f:
+                schema = json.load(f)
+        else:
+            # importlib.resources fallback for installed packages where the
+            # filesystem path may differ (e.g. zipped wheels).
+            from importlib.resources import files
+            schema_text = files("mtg").joinpath("mtg.schema.json").read_text(
+                encoding="utf-8"
+            )
+            schema = json.loads(schema_text)
         _VALIDATOR = Draft202012Validator(schema)
     return _VALIDATOR
 

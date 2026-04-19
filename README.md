@@ -93,7 +93,7 @@ Any JSON Schema `string` property can carry an `x-mtg` block:
 }
 ```
 
-Full spec: [spec/taxonomy.md](spec/taxonomy.md) · [spec/violations.md](spec/violations.md) · [spec/resolution.md](spec/resolution.md) · [spec/mtg.schema.json](spec/mtg.schema.json)
+Full spec: [spec/taxonomy.md](spec/taxonomy.md) · [spec/violations.md](spec/violations.md) · [spec/resolution.md](spec/resolution.md) · [mtg/mtg.schema.json](mtg/mtg.schema.json)
 
 ## Violation taxonomy
 
@@ -123,6 +123,39 @@ mtg validate examples/book_service.json examples/sample_call.json
 # Verify a receipt chain
 mtg receipt-verify ~/.mtg/chain.ndjson
 ```
+
+## Programmatic evaluation (`mtg.eval`)
+
+The evaluation harness runs MTG guards against an `arabic-agent-eval`-style
+JSONL dataset and aggregates per-dialect violation rates. Use it to measure
+MTG's ship-ready violation frequency before committing to a benchmark number.
+
+```python
+from pathlib import Path
+from mtg import GuardSpec
+from mtg.eval import run_on_jsonl, ALL_ARMS
+
+guard_map = {
+    "intent_phrase": GuardSpec.from_dict({
+        "slot_type": "inflected_request_form",
+        "script": "ar",
+        "dialect_expected": "gulf",
+        "morphologically_productive": True,
+        "mode": "advisory",
+    }),
+}
+
+report = run_on_jsonl(Path("datasets/mtg_slots_v1.jsonl"), guard_map)
+print(report.violation_counts)            # Counter({'DIALECT_DRIFT': 3, ...})
+print(report.dialect_violation_rates)     # {'gulf': 0.0, 'egy': 0.33, ...}
+
+# Experimental arms for the research program (spec/resolution.md)
+for arm in ALL_ARMS:
+    print(arm.name, arm.description)
+```
+
+Exports: `run_on_jsonl`, `ItemReport`, `AggregateReport`, `Condition`,
+`ARM_A`/`B`/`C`/`D`, `ALL_ARMS`. All are re-exported from `mtg.eval`.
 
 ## Limitations (v0.1.0)
 

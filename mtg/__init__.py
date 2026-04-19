@@ -2,10 +2,23 @@
 
 Public API:
 
+    # Core pipeline
     from mtg import (
         GuardSpec, Analysis, Violation, GuardResult, Receipt,
         validate_pre, validate_post, run,
         build_receipt, append_to_chain, verify_chain,
+    )
+
+    # Framework adapters
+    from mtg.adapters.openai import guard_tool              # OpenAI
+    from mtg.adapters.anthropic import guard_tool           # Anthropic
+    from mtg.adapters.hermes_fc import guard_tool           # Hermes-FC
+
+    # Evaluation harness (public — for running MTG against
+    # arabic-agent-eval style JSONL datasets)
+    from mtg.eval import (
+        Condition, ALL_ARMS, ARM_A, ARM_B, ARM_C, ARM_D,
+        ItemReport, AggregateReport, run_on_jsonl,
     )
 
 See README.md and spec/ for details.
