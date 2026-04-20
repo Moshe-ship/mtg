@@ -9,12 +9,14 @@ from __future__ import annotations
 from difflib import SequenceMatcher
 
 from mtg.bidi import detect_bidi_threats
+from mtg.prompt_injection import detect_prompt_injection
 from mtg.canonical import canonicalize, normalize
 from mtg.dialect import get_dialect_backend, KeywordDialectClassifier
 from mtg.morph import get_morph_backend
 from mtg.morph_fallback import SurfaceOnlyMorphBackend
 from mtg.script import detect_script, is_arabic_char, matches_required_script
 from mtg.translit import transliteration_violation_detected
+from mtg.uts39 import analyze as uts39_analyze, applies_to as uts39_applies_to
 from mtg.types import (
     Analysis,
     FACTORABLE_SLOTS,
@@ -223,6 +225,73 @@ def _bidi_violations(value: str) -> list[Violation]:
     return violations
 
 
+def _uts39_violations(value: str, spec: GuardSpec) -> list[Violation]:
+    """UTS #39 restriction-level check, gated by slot type.
+
+    Only fires on identifier-like slots (identifier / numeric). Natural
+    multilingual free text is exempt: a named-entity field containing
+    "أحمد محمود" has scripts=(Arabic,) and is a legitimate
+    single-script identifier, but a "free_text" declaration SHOULD NOT
+    be held to this check at all — the policy gate in
+    `uts39_applies_to` enforces that.
+    """
+    if not uts39_applies_to(spec.slot_type):
+        return []
+    if not value:
+        return []
+    finding = uts39_analyze(value)
+    if not finding.is_suspicious():
+        return []
+    severity = "high" if finding.confusable_codepoints else "medium"
+    return [
+        Violation(
+            code="UTS39_RESTRICTION_VIOLATION",
+            severity=severity,
+            phase="pre",
+            message=(
+                f"slot '{spec.slot_type}' restriction level "
+                f"'{finding.restriction_level}' fails UTS #39 policy"
+                + (
+                    f" ({len(finding.confusable_codepoints)} confusable char(s))"
+                    if finding.confusable_codepoints
+                    else ""
+                )
+            ),
+            details={
+                "slot_type": spec.slot_type,
+                **finding.to_dict(),
+            },
+        )
+    ]
+
+
+def _prompt_injection_violations(value: str) -> list[Violation]:
+    """Prompt-injection pre-flight: scan guarded values for OWASP LLM01
+    indicators (direct override, role hijack, tool escalation, indirect
+    markers). Heuristic — medium severity, advisory-by-default. Callers
+    that want to block on this can promote via their own guard layer.
+    """
+    finding = detect_prompt_injection(value)
+    if not finding.any():
+        return []
+    return [
+        Violation(
+            code="PROMPT_INJECTION_SUSPECTED",
+            severity="medium",
+            phase="pre",
+            message=(
+                f"value contains {len(finding.indicators)} prompt-injection "
+                f"indicator(s) across categories {list(finding.categories)}"
+            ),
+            details={
+                "indicator_categories": list(finding.categories),
+                "match_count": len(finding.indicators),
+                "indicators": [i.to_dict() for i in finding.indicators],
+            },
+        )
+    ]
+
+
 def _pre_call_violations(
     value: str,
     spec: GuardSpec,
@@ -233,6 +302,16 @@ def _pre_call_violations(
     # BiDi / RTL security pre-flight — always runs, regardless of declared
     # script. Security issues take priority over linguistic constraints.
     violations.extend(_bidi_violations(value))
+
+    # Prompt-injection pre-flight — OWASP LLM01 heuristic layer. Runs on
+    # every guarded value; catches the obvious hijack attempts that slip
+    # past character-level security (BiDi/homoglyph).
+    violations.extend(_prompt_injection_violations(value))
+
+    # UTS #39 restriction-level check — slot-gated, only fires on
+    # identifier-like slots. Natural multilingual text in free_text /
+    # named_entity slots stays exempt by policy.
+    violations.extend(_uts39_violations(value, spec))
 
     # Script
     if spec.script != "any" and not matches_required_script(value, spec.script):

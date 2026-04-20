@@ -112,6 +112,71 @@ def cmd_receipt_verify(args: argparse.Namespace) -> int:
     return 1
 
 
+def cmd_trace_grade(args: argparse.Namespace) -> int:
+    """Grade a chain of traces against a rubric.
+
+    Reads NDJSON (one Trace dict per line) and applies the default
+    rubric (no hard-fail turns, no forbidden violations, final turn
+    must succeed). Exits non-zero if any trace fails. Writes per-trace
+    Markdown + JSON summaries if asked."""
+    from mtg.trace import (
+        Rubric,
+        grade_trace,
+        load_ndjson,
+        render_markdown as render_trace_md,
+    )
+
+    path = Path(args.path)
+    if not path.exists():
+        print(f"chain not found: {path}", file=sys.stderr)
+        return 2
+
+    traces = load_ndjson(path)
+    if not traces:
+        print("Chain is empty.")
+        return 0
+
+    forbidden_tools = tuple(args.forbid_tool or ())
+    required_tools = tuple(args.require_tool or ())
+    rubric = Rubric(
+        max_turns=args.max_turns,
+        max_hard_fail_turns=args.max_hard_fail,
+        forbidden_tools=forbidden_tools,
+        required_tools=required_tools,
+    )
+
+    gradings = [grade_trace(t, rubric) for t in traces]
+    passed = sum(1 for g in gradings if g.outcome == "pass")
+    failed = len(gradings) - passed
+
+    print(f"traces: {len(gradings)}  pass: {passed}  fail: {failed}")
+    for trace, grading in zip(traces, gradings):
+        flag = "✅" if grading.outcome == "pass" else "❌"
+        print(f"  {flag} {trace.trace_id} ({trace.n_turns} turns) "
+              f"outcome={trace.outcome}")
+        for check in grading.failed_checks:
+            print(f"    - {check}")
+
+    if args.json:
+        payload = [
+            {"trace": t.to_dict(), "grading": g.to_dict()}
+            for t, g in zip(traces, gradings)
+        ]
+        Path(args.json).write_text(
+            json.dumps(payload, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        print(f"wrote json → {args.json}")
+    if args.markdown:
+        md_parts: list[str] = []
+        for t, g in zip(traces, gradings):
+            md_parts.append(render_trace_md(t, g))
+        Path(args.markdown).write_text("\n---\n\n".join(md_parts), encoding="utf-8")
+        print(f"wrote markdown → {args.markdown}")
+
+    return 0 if failed == 0 else 1
+
+
 def cmd_report(args: argparse.Namespace) -> int:
     """Aggregate a receipt chain into a JSON and/or HTML scorecard.
 
@@ -190,6 +255,28 @@ def main() -> int:
     sp.add_argument("--json", metavar="PATH", help="Write scorecard JSON to PATH")
     sp.add_argument("--html", metavar="PATH", help="Write scorecard HTML to PATH")
     sp.set_defaults(fn=cmd_report)
+
+    sp = sub.add_parser(
+        "trace-grade",
+        help="Grade a chain of agent traces against a rubric (NDJSON in)",
+    )
+    sp.add_argument("path", help="Path to trace chain NDJSON")
+    sp.add_argument("--json", metavar="PATH", help="Write per-trace grading JSON")
+    sp.add_argument("--markdown", metavar="PATH",
+                     help="Write per-trace Markdown summary")
+    sp.add_argument("--max-turns", type=int, default=None,
+                     help="Maximum turns allowed per trace")
+    sp.add_argument("--max-hard-fail", type=int, default=0,
+                     help="Maximum fail/error turns allowed (default 0)")
+    sp.add_argument("--forbid-tool", action="append", default=[],
+                     metavar="TOOL",
+                     help="Tool name that must NOT appear in any turn "
+                          "(repeatable; useful for abstention rubrics)")
+    sp.add_argument("--require-tool", action="append", default=[],
+                     metavar="TOOL",
+                     help="Tool name that MUST appear at least once "
+                          "(repeatable)")
+    sp.set_defaults(fn=cmd_trace_grade)
 
     args = p.parse_args()
     return args.fn(args)
