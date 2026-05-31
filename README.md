@@ -1,5 +1,8 @@
 # mtg — Morphological Type Guards
 
+> Part of the [**Mizan**](https://github.com/Moshe-ship/mizan) stack — the Arabic-first reliability scale for AI agents.
+
+
 **A JSON Schema extension for multilingual tool-call arguments.**
 
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
