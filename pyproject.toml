@@ -27,6 +27,11 @@ dependencies = [
     "jsonschema>=4.0",
 ]
 
+readme = "README.md"
+[project.urls]
+Source = "https://github.com/Moshe-ship/mtg"
+Issues = "https://github.com/Moshe-ship/mtg/issues"
+
 [project.optional-dependencies]
 morph = ["camel-tools>=1.5"]
 dev = ["pytest>=7.0"]
