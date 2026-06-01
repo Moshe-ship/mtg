@@ -8,6 +8,7 @@
 > Installed as **`mtg-guards`** on PyPI, imported as **`mtg`**: `pip install mtg-guards` then `import mtg`.
 
 [![PyPI](https://img.shields.io/pypi/v/mtg-guards)](https://pypi.org/project/mtg-guards/)
+[![CI](https://github.com/Moshe-ship/mtg/actions/workflows/ci.yml/badge.svg)](https://github.com/Moshe-ship/mtg/actions/workflows/ci.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Status: v0.1.0 advisory](https://img.shields.io/badge/status-v0.1.0%20advisory-orange.svg)](#status)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-green.svg)](https://python.org)
