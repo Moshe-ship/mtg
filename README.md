@@ -5,6 +5,8 @@
 
 **A JSON Schema extension for multilingual tool-call arguments.**
 
+> Installed as **`mtg-guards`** on PyPI, imported as **`mtg`**: `pip install mtg-guards` then `import mtg`.
+
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Status: v0.1.0 advisory](https://img.shields.io/badge/status-v0.1.0%20advisory-orange.svg)](#status)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-green.svg)](https://python.org)
