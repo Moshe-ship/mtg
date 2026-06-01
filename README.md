@@ -7,6 +7,7 @@
 
 > Installed as **`mtg-guards`** on PyPI, imported as **`mtg`**: `pip install mtg-guards` then `import mtg`.
 
+[![PyPI](https://img.shields.io/pypi/v/mtg-guards)](https://pypi.org/project/mtg-guards/)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Status: v0.1.0 advisory](https://img.shields.io/badge/status-v0.1.0%20advisory-orange.svg)](#status)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-green.svg)](https://python.org)
@@ -26,13 +27,11 @@ MTG is **agent-framework-agnostic**. Hermes is one adapter among several (OpenAI
 ## Install
 
 ```bash
-# From source (not yet on PyPI)
-git clone https://github.com/Moshe-ship/mtg.git
-cd mtg
-pip install -e .
+pip install mtg-guards            # import as `mtg`
+pip install "mtg-guards[morph]"   # + CAMeL Tools morphology backend
 
-# With optional CAMeL Tools morphology backend
-pip install -e ".[morph]"
+# or from a source checkout:
+git clone https://github.com/Moshe-ship/mtg.git && cd mtg && pip install -e .
 ```
 
 ## Quickstart
